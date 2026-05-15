@@ -19,19 +19,19 @@ def find_npe_in_reports():
                 return content
     return None
 
-# def extract_failing_file_path(stack_trace):
-#     """A basic heuristic to find the first project file in the stack trace."""
-#     # Looks for something like "at com.yourcompany.App.method(App.java:15)"
-#     match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
-#     if match:
-#         class_path = match.group(1).replace('.', '/')
-#         file_name = match.group(2)
-#
-#         # Search the repo for this file
-#         for root, dirs, files in os.walk('.'):
-#             if file_name in files:
-#                 return os.path.join(root, file_name)
-#     return None
+def extract_failing_file_path(stack_trace):
+    """A basic heuristic to find the first project file in the stack trace."""
+    # Looks for something like "at com.yourcompany.App.method(App.java:15)"
+    match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
+    if match:
+        class_path = match.group(1).replace('.', '/')
+        file_name = match.group(2)
+
+        # Search the repo for this file
+        for root, dirs, files in os.walk('.'):
+            if file_name in files:
+                return os.path.join(root, file_name)
+    return None
 
 # def generate_fix(file_path, stack_trace):
 #     """Asks the AI to fix the NPE in the provided file."""
@@ -87,10 +87,10 @@ if __name__ == "__main__":
 
     if stack_trace:
         print("NPE detected. Locating faulty file...")
-#         file_path = extract_failing_file_path(stack_trace)
+        file_path = extract_failing_file_path(stack_trace)
 #
-#         if file_path:
-#             print(f"Found faulty file: {file_path}. Generating fix...")
+        if file_path:
+            print(f"Found faulty file: {file_path}. Generating fix...")
 #             fixed_code = generate_fix(file_path, stack_trace)
 #
 #             print("Writing fix to file...")
@@ -99,7 +99,7 @@ if __name__ == "__main__":
 #
 #             print("Creating Pull Request...")
 #             create_pull_request(file_path)
-#         else:
-#             print("Could not map stack trace to a local file.")
+        else:
+            print("Could not map stack trace to a local file.")
     else:
         print("No NPE detected in test reports.")
