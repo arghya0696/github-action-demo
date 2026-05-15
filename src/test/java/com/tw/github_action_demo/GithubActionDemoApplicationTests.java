@@ -9,8 +9,9 @@ class GithubActionDemoApplicationTests {
 	@Test
 	void contextLoads() {
 
-		Integer p = null;
-		System.out.println(p.compareTo(10));
+		NPETestService npeTestService = new NPETestService();
+
+		npeTestService.testNPE();
 	}
 
 }
