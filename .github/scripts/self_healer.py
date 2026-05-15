@@ -6,7 +6,7 @@ import re
 
 # Configure your AI Provider
 # Make sure to set GEMINI_API_KEY in your GitHub Repository Secrets
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+#genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 def find_npe_in_reports():
     """Scans Maven surefire reports for NullPointerExceptions and extracts the failing class."""
@@ -19,67 +19,67 @@ def find_npe_in_reports():
                 return content
     return None
 
-def extract_failing_file_path(stack_trace):
-    """A basic heuristic to find the first project file in the stack trace."""
-    # Looks for something like "at com.yourcompany.App.method(App.java:15)"
-    match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
-    if match:
-        class_path = match.group(1).replace('.', '/')
-        file_name = match.group(2)
+# def extract_failing_file_path(stack_trace):
+#     """A basic heuristic to find the first project file in the stack trace."""
+#     # Looks for something like "at com.yourcompany.App.method(App.java:15)"
+#     match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
+#     if match:
+#         class_path = match.group(1).replace('.', '/')
+#         file_name = match.group(2)
+#
+#         # Search the repo for this file
+#         for root, dirs, files in os.walk('.'):
+#             if file_name in files:
+#                 return os.path.join(root, file_name)
+#     return None
 
-        # Search the repo for this file
-        for root, dirs, files in os.walk('.'):
-            if file_name in files:
-                return os.path.join(root, file_name)
-    return None
-
-def generate_fix(file_path, stack_trace):
-    """Asks the AI to fix the NPE in the provided file."""
-    with open(file_path, 'r') as file:
-        java_code = file.read()
-
-    prompt = f"""
-    You are an expert Java developer. The following code throws a NullPointerException.
-
-    Stack Trace:
-    {stack_trace}
-
-    Java Code:
-    {java_code}
-
-    Fix the NullPointerException by adding appropriate null checks or Optional wrapping.
-    Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
-    """
-
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    response = model.generate_content(prompt)
-
-    # Clean up standard markdown code blocks if the AI accidentally includes them
-    fixed_code = response.text.replace('```java', '').replace('```', '').strip()
-    return fixed_code
-
-def create_pull_request(file_path):
-    """Creates a git branch, commits the fix, and raises a PR via GitHub CLI."""
-    branch_name = "ai-fix-npe-auto"
-
-    # Git commands
-    subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer"])
-    subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
-    subprocess.run(["git", "checkout", "-b", branch_name])
-    subprocess.run(["git", "add", file_path])
-    subprocess.run(["git", "commit", "-m", "🤖 AI Auto-Fix: Resolved NullPointerException"])
-    subprocess.run(["git", "push", "origin", branch_name])
-
-    # GitHub CLI command to create PR
-    os.environ["GH_TOKEN"] = os.environ["GITHUB_TOKEN"]
-    subprocess.run([
-        "gh", "pr", "create",
-        "--title", "🤖 AI Auto-Fix: NullPointerException",
-        "--body", "This PR was generated automatically to fix a NullPointerException detected during the CI pipeline. **Please review the logic before merging.**",
-        "--base", "master",
-        "--head", branch_name
-    ])
-    print("Pull Request created successfully!")
+# def generate_fix(file_path, stack_trace):
+#     """Asks the AI to fix the NPE in the provided file."""
+#     with open(file_path, 'r') as file:
+#         java_code = file.read()
+#
+#     prompt = f"""
+#     You are an expert Java developer. The following code throws a NullPointerException.
+#
+#     Stack Trace:
+#     {stack_trace}
+#
+#     Java Code:
+#     {java_code}
+#
+#     Fix the NullPointerException by adding appropriate null checks or Optional wrapping.
+#     Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
+#     """
+#
+#     model = genai.GenerativeModel('gemini-1.5-flash')
+#     response = model.generate_content(prompt)
+#
+#     # Clean up standard markdown code blocks if the AI accidentally includes them
+#     fixed_code = response.text.replace('```java', '').replace('```', '').strip()
+#     return fixed_code
+#
+# def create_pull_request(file_path):
+#     """Creates a git branch, commits the fix, and raises a PR via GitHub CLI."""
+#     branch_name = "ai-fix-npe-auto"
+#
+#     # Git commands
+#     subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer"])
+#     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
+#     subprocess.run(["git", "checkout", "-b", branch_name])
+#     subprocess.run(["git", "add", file_path])
+#     subprocess.run(["git", "commit", "-m", "🤖 AI Auto-Fix: Resolved NullPointerException"])
+#     subprocess.run(["git", "push", "origin", branch_name])
+#
+#     # GitHub CLI command to create PR
+#     os.environ["GH_TOKEN"] = os.environ["GITHUB_TOKEN"]
+#     subprocess.run([
+#         "gh", "pr", "create",
+#         "--title", "🤖 AI Auto-Fix: NullPointerException",
+#         "--body", "This PR was generated automatically to fix a NullPointerException detected during the CI pipeline. **Please review the logic before merging.**",
+#         "--base", "master",
+#         "--head", branch_name
+#     ])
+#     print("Pull Request created successfully!")
 
 if __name__ == "__main__":
     print("Starting Self-Healing Analysis...")
