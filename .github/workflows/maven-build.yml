@@ -47,7 +47,7 @@ jobs:
         if: failure()
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
-          python self_healer.py
+          python .github/scripts/self_healer.py
 
       - name: Stage 5 - Print Result
         if: always()
