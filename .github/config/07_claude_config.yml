@@ -1,0 +1,266 @@
+# Self-Healing Pipeline Configuration
+# .github/config/claude_config.yml
+
+# ============================================
+# API Configuration
+# ============================================
+api:
+  # Which Claude model to use
+  # - lite:     claude-3-5-haiku (fastest, cheapest) - RECOMMENDED FOR HACKATHON
+  # - standard: claude-3-5-sonnet (balanced)
+  # - premium:  claude-3-opus (most capable)
+  tier: "lite"
+  
+  # Maximum API calls allowed per day
+  max_calls_per_day: 20
+  
+  # Timeout for API calls (seconds)
+  api_timeout: 60
+  
+  # Retry attempts for failed API calls
+  max_retries: 3
+  
+  # Base URL (default: Anthropic's production API)
+  # base_url: https://api.anthropic.com
+
+# ============================================
+# Error Analysis Configuration
+# ============================================
+analysis:
+  # Types of errors to analyze
+  error_types:
+    - "NullPointerException"
+    - "CompilationError"
+    - "TestFailure"
+    - "TimeoutException"
+    - "DependencyIssue"
+    - "AssertionError"
+  
+  # Maximum errors to batch together in one API call
+  # Higher = fewer API calls but longer analysis
+  max_errors_per_batch: 5
+  
+  # Include full logs in analysis?
+  include_logs: true
+  
+  # Maximum size of source code context (lines)
+  max_context_lines: 50
+  
+  # Error deduplication (group similar errors)
+  deduplicate_errors: true
+
+# ============================================
+# Code Generation Configuration
+# ============================================
+generation:
+  # Validation settings
+  validate_syntax: true
+  validate_compilation: true
+  
+  # Code quality checks
+  run_lint_checks: false
+  run_tests_on_fix: false
+  
+  # Temperature for Claude (lower = more deterministic)
+  temperature: 0.1
+  
+  # Maximum tokens for response
+  max_tokens: 1024
+
+# ============================================
+# Git and PR Configuration
+# ============================================
+git:
+  # Create pull requests automatically
+  create_pr: true
+  
+  # Auto-merge PRs (ONLY if code passes validation)
+  auto_merge: false
+  
+  # Require PR review before merge
+  require_review: true
+  
+  # Branch naming convention
+  branch_prefix: "ai-fix"
+  
+  # Commit message template
+  commit_template: "🤖 AI Auto-Fix: {error_type}"
+  
+  # Add labels to created PRs
+  pr_labels:
+    - "🤖-ai-generated"
+    - "auto-generated"
+    - "needs-review"
+
+# ============================================
+# Safety Configuration
+# ============================================
+safety:
+  # Never modify these files (safety list)
+  protected_files:
+    - "pom.xml"
+    - ".gitignore"
+    - "README.md"
+    - "Dockerfile"
+  
+  # Only fix files matching these patterns
+  allowed_patterns:
+    - "src/main/java/**"
+    - "src/test/java/**"
+  
+  # Confidence threshold for applying fixes
+  # 0-100: Only apply fixes with confidence >= this value
+  min_confidence: 60
+  
+  # Require human review for:
+  # - high_risk: Changes to critical code
+  # - low_confidence: Generated fixes with low confidence
+  require_review_for:
+    - "high_risk"
+    - "low_confidence"
+
+# ============================================
+# Logging Configuration
+# ============================================
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+  
+  # Log directory
+  directory: ".ai-healer/logs"
+  
+  # Log files to create
+  files:
+    main: "self_healer.log"
+    api: "api_calls.log"
+    errors: "errors_found.log"
+    fixes: "fixes_applied.log"
+    prs: "prs_created.log"
+  
+  # Keep logs for N days
+  retention_days: 30
+  
+  # Log sensitive info (API details, token)
+  include_sensitive: false
+
+# ============================================
+# Prompt Optimization
+# ============================================
+prompts:
+  # System prompt for error analysis
+  system_prompt: |
+    You are an expert Java developer helping to fix CI/CD test failures.
+    Analyze errors thoroughly and provide correct, production-ready fixes.
+    Include proper null checks and error handling.
+    
+    Always respond with valid JSON containing:
+    - root_cause: explanation of the issue
+    - fixes: array of {file, fixed_code}
+    - confidence: 0-100 score
+    - test_recommendations: array of suggestions
+  
+  # Temperature for different error types
+  temperature_by_type:
+    NullPointerException: 0.1      # Very deterministic
+    CompilationError: 0.1          # Deterministic
+    TestFailure: 0.3               # Some flexibility
+    DependencyIssue: 0.2           # Careful analysis
+    PerformanceIssue: 0.4          # More exploration
+
+# ============================================
+# Notification Configuration
+# ============================================
+notifications:
+  # Send notifications on completion
+  enabled: true
+  
+  # Notification channels
+  channels:
+    github_pr: true     # Comment on PR
+    github_issues: false # Create issue
+    slack: false        # Send to Slack (future)
+    email: false        # Send email (future)
+  
+  # Notify on
+  on_success: true
+  on_failure: true
+  on_partial: true
+
+# ============================================
+# Metrics and Analytics
+# ============================================
+metrics:
+  # Enable metrics collection
+  enabled: true
+  
+  # Track
+  track_fix_success_rate: true
+  track_api_costs: true
+  track_execution_time: true
+  
+  # Report on
+  report_frequency: "daily"   # daily, weekly, monthly
+
+# ============================================
+# Advanced Configuration
+# ============================================
+advanced:
+  # Parallel processing
+  parallel_analysis: false
+  
+  # Cache responses from Claude
+  cache_responses: true
+  cache_ttl_hours: 24
+  
+  # Fallback to heuristics if API fails
+  use_heuristics_on_failure: true
+  
+  # Learning mode - store patterns for future use
+  learning_mode: false
+  
+  # Maximum analysis time per batch (seconds)
+  max_analysis_time: 120
+
+# ============================================
+# Test Configuration
+# ============================================
+test:
+  # Test frameworks
+  frameworks:
+    - "junit"
+    - "testng"
+  
+  # Test patterns to match
+  test_path_pattern: "**/src/test/java/**/*Test.java"
+  
+  # Run tests on generated fixes
+  validate_with_tests: false
+
+# ============================================
+# Environment-specific overrides
+# ============================================
+environments:
+  development:
+    api:
+      tier: "lite"
+      max_calls_per_day: 50
+    logging:
+      level: "DEBUG"
+  
+  staging:
+    api:
+      tier: "standard"
+      max_calls_per_day: 100
+    generation:
+      validate_syntax: true
+      validate_compilation: true
+  
+  production:
+    api:
+      tier: "standard"
+      max_calls_per_day: 500
+    safety:
+      min_confidence: 80
+      require_review_for: ["high_risk"]
+    git:
+      auto_merge: false
