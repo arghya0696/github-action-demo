@@ -2,7 +2,7 @@ name: Spring Boot Build and Test with AI Self-Healing
 
 on:
   push:
-    branches: [ "master", "main", "develop" ]
+    branches: [ "feature-gha-testing" ]
   pull_request:
     branches: [ "master", "main", "develop" ]
   workflow_dispatch:  # Allow manual trigger for testing
