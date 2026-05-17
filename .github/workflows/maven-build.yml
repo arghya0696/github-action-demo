@@ -63,6 +63,7 @@ jobs:
         id: maven-build
         #continue-on-error: true  # Continue even if tests fail
         run: |
+          set -o pipefail
           echo "=== Starting Maven Build and Tests ==="
           mvn clean install -B -X 2>&1 | tee build.log
           BUILD_EXIT=$?
