@@ -7,3 +7,7 @@ public class NPETestService {
         System.out.println(p.compareTo(10));
     }
 }
+
+public String processData(String input) {
+    return input.toUpperCase();  // input could be null!
+}

@@ -14,4 +14,9 @@ class GithubActionDemoApplicationTests {
 		npeTestService.testNPE();
 	}
 
+	@Test
+	public void testWillFail() {
+		assertEquals("EXPECTED", "ACTUAL");
+	}
+
 }
