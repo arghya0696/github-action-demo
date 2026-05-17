@@ -88,7 +88,8 @@ jobs:
         if: failure()
         run: |
           echo "=== Analyzing Test Failures ==="
-          
+          echo "failure_detected=true" >> $GITHUB_OUTPUT 
+
           # Check for surefire reports
           if [ -d "target/surefire-reports" ]; then
               echo "failure_detected=true" >> $GITHUB_OUTPUT
@@ -96,7 +97,7 @@ jobs:
               ls -la target/surefire-reports/
           else
               echo "failure_detected=false" >> $GITHUB_OUTPUT
-              echo "No surefire reports found"
+              echo "No surefire reports found (Likely a Compilation or POM error)"
           fi
 
       - name: AI Self-Healing Stage
@@ -173,6 +174,8 @@ jobs:
     continue-on-error: true
 
     steps:
+      - name: Checkout Code
+              uses: actions/checkout@v4
       - name: Check for AI-Generated PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
