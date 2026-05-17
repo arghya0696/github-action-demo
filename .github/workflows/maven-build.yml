@@ -61,7 +61,7 @@ jobs:
       # ============================================
       - name: Run Maven Clean Install
         id: maven-build
-        continue-on-error: true  # Continue even if tests fail
+        #continue-on-error: true  # Continue even if tests fail
         run: |
           echo "=== Starting Maven Build and Tests ==="
           mvn clean install -B -X 2>&1 | tee build.log
