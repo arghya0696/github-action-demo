@@ -175,7 +175,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-              uses: actions/checkout@v4
+        uses: actions/checkout@v4
       - name: Check for AI-Generated PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
