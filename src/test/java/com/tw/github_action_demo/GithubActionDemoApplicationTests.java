@@ -8,15 +8,8 @@ class GithubActionDemoApplicationTests {
 
 	@Test
 	void contextLoads() {
-
 		NPETestService npeTestService = new NPETestService();
-
+		// This will trigger the NullPointerException!
 		npeTestService.testNPE();
 	}
-
-	@Test
-	public void testWillFail() {
-		assertEquals("EXPECTED", "ACTUAL");
-	}
-
 }
