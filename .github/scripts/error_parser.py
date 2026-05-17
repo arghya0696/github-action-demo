@@ -97,30 +97,45 @@ class ErrorParser:
         re.IGNORECASE
     )
     
-    def parse_surefire_reports(self, surefire_dir: Path) -> List[ErrorContext]:
-        """Parse Maven surefire test reports."""
+def _parse_surefire_content(self, content: str, filename: str) -> List[ErrorContext]:
+        """Parse content of a surefire report file."""
         errors = []
+        test_name = filename.replace(".txt", "").replace("TEST-", "")
         
-        if not surefire_dir.exists():
-            logger.warning(f"Surefire directory not found: {surefire_dir}")
-            return errors
+        # FIX: Standard Maven surefire uses <<< ERROR! or <<< FAILURE! markers
+        sections = re.split(r'<<<\s*(?:ERROR|FAILURE)!', content)
         
-        # Find all test result files
-        report_files = list(surefire_dir.glob("*.txt"))
-        logger.info(f"Found {len(report_files)} surefire report files")
-        
-        for report_file in report_files:
+        for section in sections[1:]: 
             try:
-                with open(report_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
+                # The first line is usually the exception name and message
+                lines = section.strip().split('\n')
+                error_message = lines.strip() if lines else "Unknown Error"
                 
-                # Parse report file
-                file_errors = self._parse_surefire_content(content, report_file.name)
-                errors.extend(file_errors)
-                logger.info(f"Parsed {len(file_errors)} error(s) from {report_file.name}")
+                # The rest is the stack trace
+                stack_trace = section.strip()[:1000]
+                
+                error_type = self._classify_error(error_message, stack_trace)
+                file_path, line_no = self._extract_file_location(stack_trace)
+                source_context = self._get_source_context(file_path, line_no)
+                class_name, method_name = self._extract_class_method(stack_trace)
+                
+                error = ErrorContext(
+                    error_type=error_type.value if isinstance(error_type, ErrorType) else error_type,
+                    error_message=error_message,
+                    file_path=file_path,
+                    line_number=line_no,
+                    stack_trace=stack_trace,
+                    source_context=source_context,
+                    test_name=test_name,
+                    class_name=class_name,
+                    method_name=method_name
+                )
+                
+                errors.append(error)
+                logger.debug(f"Parsed error: {error}")
             
             except Exception as e:
-                logger.error(f"Error parsing {report_file}: {str(e)}")
+                logger.debug(f"Error parsing surefire section: {str(e)}")
         
         return errors
     
@@ -242,58 +257,50 @@ class ErrorParser:
         return errors
     
     def _parse_test_failures(self, content: str) -> List[ErrorContext]:
-        """Extract test failures from build output."""
-        errors = []
-        
-        # Split by test failure markers
-        failure_sections = re.split(
-            r'\n\s*(?:FAILURE|ERROR|Failed tests|Tests run:)',
-            content
-        )
-        
-        for section in failure_sections[1:]:
-            try:
-                # Extract stack trace from section
-                stack_match = re.search(
-                    r'at [\w\.]+ \(.+?\.java:\d+\)',
-                    section
-                )
-                
-                if stack_match:
-                    stack_trace = section[:1000]
-                    
-                    # Determine error type
-                    error_type = self._classify_error("Test Failure", section)
-                    
-                    # Extract file info
-                    file_path, line_no = self._extract_file_location(stack_trace)
-                    
-                    source_context = self._get_source_context(file_path, line_no)
-                    
-                    # Extract test name
-                    test_match = re.search(r'(\w+Test)\s+', section)
-                    test_name = test_match.group(1) if test_match else "Unknown"
-                    
-                    class_name, method_name = self._extract_class_method(stack_trace)
-                    
-                    error = ErrorContext(
-                        error_type=error_type.value if isinstance(error_type, ErrorType) else error_type,
-                        error_message="Test Failure",
-                        file_path=file_path,
-                        line_number=line_no,
-                        stack_trace=stack_trace,
-                        source_context=source_context,
-                        test_name=test_name,
-                        class_name=class_name,
-                        method_name=method_name
-                    )
-                    
-                    errors.append(error)
+            """Extract test failures from build output."""
+            errors = []
             
-            except Exception as e:
-                logger.debug(f"Error parsing test failure: {str(e)}")
-        
-        return errors
+            failure_sections = re.split(
+                r'\n\s*(?:FAILURE|ERROR|Failed tests|Tests run:)',
+                content
+            )
+            
+            for section in failure_sections[1:]:
+                try:
+                    # FIX: Use your built-in STACK_TRACE_PATTERN which handles spaces correctly!
+                    stack_match = self.STACK_TRACE_PATTERN.search(section)
+                    
+                    if stack_match:
+                        stack_trace = section[:1000]
+                        
+                        error_type = self._classify_error("Test Failure", section)
+                        file_path, line_no = self._extract_file_location(stack_trace)
+                        source_context = self._get_source_context(file_path, line_no)
+                        
+                        test_match = re.search(r'(\w+Test)\s+', section)
+                        test_name = test_match.group(1) if test_match else "Unknown"
+                        
+                        class_name, method_name = self._extract_class_method(stack_trace)
+                        
+                        error = ErrorContext(
+                            error_type=error_type.value if isinstance(error_type, ErrorType) else error_type,
+                            error_message="Test Failure",
+                            file_path=file_path,
+                            line_number=line_no,
+                            stack_trace=stack_trace,
+                            source_context=source_context,
+                            test_name=test_name,
+                            class_name=class_name,
+                            method_name=method_name
+                        )
+                        
+                        errors.append(error)
+                
+                except Exception as e:
+                    logger.debug(f"Error parsing test failure: {str(e)}")
+            
+            return errors
+  
     
     def _classify_error(self, message: str, stack_trace: str) -> ErrorType:
         """Classify error type from message and stack trace."""
