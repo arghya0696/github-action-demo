@@ -2,9 +2,9 @@ name: Spring Boot Build and Test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "test-spring-issues" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "test-spring-issues" ]
 
 # Grants the GITHUB_TOKEN permission to push branches and create PRs
 permissions:
