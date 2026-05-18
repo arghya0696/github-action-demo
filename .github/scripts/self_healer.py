@@ -117,7 +117,7 @@ if __name__ == "__main__":
     print(f"Starting Self-Healing Analysis looking for: {TARGET_EXCEPTIONS}")
 
     # Read the standards first
-    standards = get_coding_standards("coding-standards.md")
+    standards = get_coding_standards(".github/scripts/coding-standards.md")
 
     stack_trace, exc_type = find_exception_in_reports()
 
