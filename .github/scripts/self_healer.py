@@ -14,125 +14,48 @@ client = anthropic.Anthropic(api_key=api_key)
 
 # 2. Fetch target exceptions from the environment
 exceptions_env = os.environ.get("TARGET_EXCEPTIONS", "java.lang.NullPointerException")
-TARGET_EXCEPTIONS = [ex.strip() for ex in exceptions_env.split(",") if ex.strip()]
+TARGET_EXCEPTIONS = [ex.strip() for ex in exceptions_env.split(",")]
 
-def get_coding_standards():
-    """Reads the coding standards, checking multiple likely paths."""
-    potential_paths = [
-        ".github/scripts/coding-standards.md",
-        "coding-standards.md",
-        "../coding-standards.md"
-    ]
-
-    for path in potential_paths:
-        if os.path.exists(path):
-            print(f"✅ Success: Loaded coding standards from {path}")
-            with open(path, 'r') as file:
-                return file.read()
-
-    # --- DEBUGGING BLOCK ---
-    print("❌ Warning: coding-standards.md not found in any expected location.")
-    print("--- Debugging Info ---")
-    print("Current Working Directory:", os.getcwd())
-
-    scripts_dir = ".github/scripts/"
-    if os.path.exists(scripts_dir):
-        print(f"Contents of {scripts_dir}:", os.listdir(scripts_dir))
+def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
+    """Reads the coding standards from an external markdown file."""
+    if os.path.exists(file_path):
+        print(f"Loaded coding standards from {file_path}")
+        with open(file_path, 'r') as file:
+            return file.read()
     else:
-        print(f"Directory {scripts_dir} does not exist in the current working directory.")
-
-    print("Contents of root directory:", os.listdir("."))
-    print("----------------------")
-
-    return "Apply general modern Java best practices."
+        print(f"Warning: {file_path} not found. Proceeding with default AI knowledge.")
+        return "Apply general modern Java best practices."
 
 def find_exception_in_reports():
-    """Scans Maven surefire reports for any exception, prioritizing TARGET_EXCEPTIONS."""
+    """Scans Maven surefire reports for target exceptions."""
     reports = glob.glob('target/surefire-reports/*.txt')
-
-    fallback_content = None
-    fallback_exc_type = None
-
     for report in reports:
         with open(report, 'r') as file:
             content = file.read()
-
-            # 1. PRIORITY: Check for specific TARGET_EXCEPTIONS first
             for exc_type in TARGET_EXCEPTIONS:
                 if exc_type in content:
-                    print(f"🎯 Found prioritized target '{exc_type}' in report: {report}")
+                    print(f"Found {exc_type} in report: {report}")
                     return content, exc_type
-
-            # 2. FALLBACK: If we haven't found a prioritized one, look for ANY exception or error
-            if not fallback_exc_type:
-                # Regex looks for standard Java exception names (e.g., java.lang.RuntimeException, AssertionError)
-                match = re.search(r'([a-zA-Z0-9_.]+(?:Exception|Error|Failure))', content)
-                if match:
-                    fallback_exc_type = match.group(1)
-                    fallback_content = content
-                    print(f"⚠️ Found non-targeted issue '{fallback_exc_type}' in report: {report}")
-                elif "FAILURE!" in content or "ERROR!" in content:
-                    # Absolute fallback if regex misses but maven says it failed
-                    fallback_exc_type = "Generic Test Failure"
-                    fallback_content = content
-                    print(f"⚠️ Found generic test failure in report: {report}")
-
-    # If we didn't find a target exception, but found SOMETHING, return the fallback
-    if fallback_content and fallback_exc_type:
-        return fallback_content, fallback_exc_type
-
     return None, None
 
 def extract_failing_file_path(stack_trace):
-    """Finds the first project file in the stack trace with heavy debugging."""
-    print("\n--- DEBUGGING FILE EXTRACTION ---")
+    """Finds the first project file in the stack trace."""
+    match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
+    if match:
+        class_path = match.group(1).replace('.', '/')
+        file_name = match.group(2)
 
-    # 1. Broadened Regex: Added \$ just in case of inner classes, and made spaces flexible
-    # Matches patterns like: at com.company.MyClass.method(MyClass.java:42)
-    match = re.search(r'at\s+([\w\.\$]+)\(([\w]+\.java):(\d+)\)', stack_trace)
-
-    if not match:
-        print("❌ REGEX FAILED: Could not find a standard 'at ...(File.java:Line)' pattern in the stack trace.")
-        print("Here is a snippet of the stack trace we tried to parse:")
-        # Print the first 500 characters so you can see what the text actually looks like
-        print(stack_trace[:500] + "\n...")
-        print("---------------------------------\n")
-        return None
-
-    class_path = match.group(1).replace('.', '/')
-    file_name = match.group(2)
-    line_number = match.group(3)
-
-    print(f"✅ REGEX SUCCESS: Found reference to file '{file_name}' at line {line_number}")
-    print(f"🔍 Searching local repository for '{file_name}'...")
-
-    # 2. Search for the file
-    found_paths = []
-    for root, dirs, files in os.walk('.'):
-        if file_name in files:
-            full_path = os.path.join(root, file_name)
-            found_paths.append(full_path)
-
-    if not found_paths:
-        print(f"❌ SEARCH FAILED: '{file_name}' does not exist anywhere in the current directory.")
-        print("Current Working Directory:", os.getcwd())
-        print("---------------------------------\n")
-        return None
-
-    # If we found it, use the first match (usually correct unless you have duplicate file names)
-    selected_path = found_paths[0]
-    print(f"✅ SEARCH SUCCESS: Found file at '{selected_path}'")
-    if len(found_paths) > 1:
-        print(f"⚠️ Note: Found multiple files with this name. Using the first one: {found_paths}")
-
-    print("---------------------------------\n")
-    return selected_path
+        for root, dirs, files in os.walk('.'):
+            if file_name in files:
+                return os.path.join(root, file_name)
+    return None
 
 def generate_fix(file_path, stack_trace, exc_type, coding_standards):
     """Asks Claude to fix the exception using external coding standards."""
     with open(file_path, 'r') as file:
         java_code = file.read()
 
+    # Inject the external standards into the System Prompt
     system_instructions = f"""
     You are a Senior Java Staff Engineer resolving CI/CD pipeline failures. 
     You must strictly adhere to the following Team Coding Standards when writing fixes.
@@ -156,7 +79,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards):
     """
 
     message = client.messages.create(
-        model="claude-sonnet-4-6", # Make sure this matches your Anthropic subscription
+        model="claude-sonnet-4-6",
         max_tokens=4000,
         system=system_instructions,
         messages=[
@@ -191,26 +114,29 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards):
 #     print("Pull Request created successfully!")
 
 if __name__ == "__main__":
-    print(f"Starting Self-Healing Analysis looking for prioritized targets: {TARGET_EXCEPTIONS}")
+    print(f"Starting Self-Healing Analysis looking for: {TARGET_EXCEPTIONS}")
 
-    standards = get_coding_standards()
+    # Read the standards first
+    standards = get_coding_standards(".github/scripts/coding-standards.md")
+
     stack_trace, exc_type = find_exception_in_reports()
 
     if stack_trace and exc_type:
-        print(f"Analysis complete. Analyzing cause: {exc_type}. Locating faulty file...")
+        print(f"{exc_type} detected. Locating faulty file...")
         file_path = extract_failing_file_path(stack_trace)
 
         if file_path:
             print(f"Found faulty file: {file_path}. Generating fix...")
+            # Pass the standards to the AI generator
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards)
 
-            print("Writing fix to file...\n\n", fixed_code)
+            print("Writing fix to file...", fixed_code)
             # with open(file_path, 'w') as file:
             #     file.write(fixed_code)
             #
             # print("Creating Pull Request...")
             # create_pull_request(file_path, exc_type)
         else:
-            print("Could not map stack trace to a local file. Unable to proceed with auto-fix.")
+            print("Could not map stack trace to a local file.")
     else:
-        print("No exceptions or test failures detected in reports.")
+        print("No target exceptions detected in test reports.")
