@@ -48,6 +48,7 @@ jobs:
         env:
           # This maps the secret to an environment variable in the Ubuntu runner
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_EXCEPTIONS: "java.lang.NullPointerException,java.lang.ClassCastException,java.lang.IndexOutOfBoundsException,java.lang.IllegalArgumentException"
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
           pip install anthropic
