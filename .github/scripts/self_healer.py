@@ -84,16 +84,49 @@ def find_exception_in_reports():
     return None, None
 
 def extract_failing_file_path(stack_trace):
-    """Finds the first project file in the stack trace."""
-    match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
-    if match:
-        class_path = match.group(1).replace('.', '/')
-        file_name = match.group(2)
+    """Finds the first project file in the stack trace with heavy debugging."""
+    print("\n--- DEBUGGING FILE EXTRACTION ---")
 
-        for root, dirs, files in os.walk('.'):
-            if file_name in files:
-                return os.path.join(root, file_name)
-    return None
+    # 1. Broadened Regex: Added \$ just in case of inner classes, and made spaces flexible
+    # Matches patterns like: at com.company.MyClass.method(MyClass.java:42)
+    match = re.search(r'at\s+([\w\.\$]+)\(([\w]+\.java):(\d+)\)', stack_trace)
+
+    if not match:
+        print("❌ REGEX FAILED: Could not find a standard 'at ...(File.java:Line)' pattern in the stack trace.")
+        print("Here is a snippet of the stack trace we tried to parse:")
+        # Print the first 500 characters so you can see what the text actually looks like
+        print(stack_trace[:500] + "\n...")
+        print("---------------------------------\n")
+        return None
+
+    class_path = match.group(1).replace('.', '/')
+    file_name = match.group(2)
+    line_number = match.group(3)
+
+    print(f"✅ REGEX SUCCESS: Found reference to file '{file_name}' at line {line_number}")
+    print(f"🔍 Searching local repository for '{file_name}'...")
+
+    # 2. Search for the file
+    found_paths = []
+    for root, dirs, files in os.walk('.'):
+        if file_name in files:
+            full_path = os.path.join(root, file_name)
+            found_paths.append(full_path)
+
+    if not found_paths:
+        print(f"❌ SEARCH FAILED: '{file_name}' does not exist anywhere in the current directory.")
+        print("Current Working Directory:", os.getcwd())
+        print("---------------------------------\n")
+        return None
+
+    # If we found it, use the first match (usually correct unless you have duplicate file names)
+    selected_path = found_paths[0]
+    print(f"✅ SEARCH SUCCESS: Found file at '{selected_path}'")
+    if len(found_paths) > 1:
+        print(f"⚠️ Note: Found multiple files with this name. Using the first one: {found_paths}")
+
+    print("---------------------------------\n")
+    return selected_path
 
 def generate_fix(file_path, stack_trace, exc_type, coding_standards):
     """Asks Claude to fix the exception using external coding standards."""
