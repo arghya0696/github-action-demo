@@ -9,7 +9,7 @@ class GithubActionDemoApplicationTests {
 	@Test
 	void contextLoads() {
 
-		NPETestService npeTestService = new NPETestService();
+		NPETestServiceImpl npeTestService = new NPETestServiceImpl();
 
 		npeTestService.testNPE();
 	}

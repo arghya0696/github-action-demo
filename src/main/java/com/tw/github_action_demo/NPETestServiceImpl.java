@@ -1,9 +1,9 @@
 package com.tw.github_action_demo;
 
-public class NPETestService {
+public class NPETestServiceImpl {
 
     public void testNPE() {
-        Integer p = null;
+        Integer p = 10;
         System.out.println(p.compareTo(10));
     }
 }
