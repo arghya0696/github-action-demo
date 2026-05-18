@@ -70,13 +70,17 @@ def find_exception_in_reports():
 def get_filename_from_ai(stack_trace):
     """STEP 1: Uses Claude to intelligently extract the faulty file name from a stack trace."""
     prompt = f"""
-    Analyze the following Java stack trace. Identify the main project source file where the exception originated.
-    Ignore standard Java libraries (e.g., java.base), testing frameworks (e.g., JUnit, Surefire), and Spring framework internal classes.
+    Analyze the following Java stack trace to identify the main project source file that needs to be modified to fix the error.
+    
+    Rules for identification:
+    1. Standard Errors: Look for the highest user-created class in the execution stack.
+    2. Spring Dependency Injection Errors (e.g., UnsatisfiedDependencyException, NoSuchBeanDefinitionException): The user code will NOT be in the execution stack. Instead, read the exception message. Identify the class that is missing an annotation (like @Service or @Component) or the class where the injection is failing (e.g., if the error says "No qualifying bean of type 'com.company.MyServiceImpl'", you should return 'MyServiceImpl.java').
+    3. Ignore standard Java libraries (java.base) and framework internal classes (org.springframework, org.junit).
     
     Stack Trace:
     {stack_trace}
     
-    Return EXACTLY AND ONLY the file name with its extension (e.g., NPETestService.java). Do not output any extra words, markdown, or punctuation.
+    Return EXACTLY AND ONLY the file name with its extension (e.g., NPETestServiceImpl.java). Do not output any extra words, markdown, or punctuation.
     """
 
     message = client.messages.create(
