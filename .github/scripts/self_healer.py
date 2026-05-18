@@ -16,7 +16,7 @@ client = anthropic.Anthropic(api_key=api_key)
 exceptions_env = os.environ.get("TARGET_EXCEPTIONS", "java.lang.NullPointerException")
 TARGET_EXCEPTIONS = [ex.strip() for ex in exceptions_env.split(",")]
 
-def get_coding_standards(file_path="coding-standards.md"):
+def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
     """Reads the coding standards from an external markdown file."""
     if os.path.exists(file_path):
         print(f"Loaded coding standards from {file_path}")
