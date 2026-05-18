@@ -57,7 +57,7 @@ def generate_fix(file_path, stack_trace):
 
     # 2. Make the API call to Claude
     message = client.messages.create(
-        model="claude-3-5-sonnet-20241022", # Best balance of speed and coding ability
+        model="claude-sonnet-4-6", # Best balance of speed and coding ability
         max_tokens=4000,
         messages=[
             {"role": "user", "content": prompt}
