@@ -2,11 +2,16 @@ import os
 import glob
 import subprocess
 import re
-# import google.generativeai as genai
+import anthropic
 
-# Configure your AI Provider
-# Make sure to set GEMINI_API_KEY in your GitHub Repository Secrets
-#genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# 1. Initialize the Anthropic client
+# We extract the API key from the environment variables configured by GitHub Actions.
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    print("Error: ANTHROPIC_API_KEY environment variable is not set.")
+    exit(1)
+
+client = anthropic.Anthropic(api_key=api_key)
 
 def find_npe_in_reports():
     """Scans Maven surefire reports for NullPointerExceptions and extracts the failing class."""
@@ -21,7 +26,6 @@ def find_npe_in_reports():
 
 def extract_failing_file_path(stack_trace):
     """A basic heuristic to find the first project file in the stack trace."""
-    # Looks for something like "at com.yourcompany.App.method(App.java:15)"
     match = re.search(r'at ([\w\.]+)\(([\w]+\.java):(\d+)\)', stack_trace)
     if match:
         class_path = match.group(1).replace('.', '/')
@@ -33,37 +37,43 @@ def extract_failing_file_path(stack_trace):
                 return os.path.join(root, file_name)
     return None
 
-# def generate_fix(file_path, stack_trace):
-#     """Asks the AI to fix the NPE in the provided file."""
-#     with open(file_path, 'r') as file:
-#         java_code = file.read()
-#
-#     prompt = f"""
-#     You are an expert Java developer. The following code throws a NullPointerException.
-#
-#     Stack Trace:
-#     {stack_trace}
-#
-#     Java Code:
-#     {java_code}
-#
-#     Fix the NullPointerException by adding appropriate null checks or Optional wrapping.
-#     Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
-#     """
-#
-#     model = genai.GenerativeModel('gemini-1.5-flash')
-#     response = model.generate_content(prompt)
-#
-#     # Clean up standard markdown code blocks if the AI accidentally includes them
-#     fixed_code = response.text.replace('```java', '').replace('```', '').strip()
-#     return fixed_code
-#
+def generate_fix(file_path, stack_trace):
+    """Asks Claude to fix the NPE in the provided file."""
+    with open(file_path, 'r') as file:
+        java_code = file.read()
+
+    prompt = f"""
+    You are an expert Java developer. The following code throws a NullPointerException.
+    
+    Stack Trace:
+    {stack_trace}
+    
+    Java Code:
+    {java_code}
+    
+    Fix the NullPointerException by adding appropriate null checks or Optional wrapping. 
+    Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
+    """
+
+    # 2. Make the API call to Claude
+    message = client.messages.create(
+        model="claude-3-5-sonnet-20241022", # Best balance of speed and coding ability
+        max_tokens=4000,
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    # 3. Extract the response text
+    fixed_code = message.content[0].text.replace('```java', '').replace('```', '').strip()
+    return fixed_code
+
 # def create_pull_request(file_path):
 #     """Creates a git branch, commits the fix, and raises a PR via GitHub CLI."""
-#     branch_name = "ai-fix-npe-auto"
+#     branch_name = "ai-fix-npe-auto-claude"
 #
 #     # Git commands
-#     subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer"])
+#     subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer (Claude)"])
 #     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
 #     subprocess.run(["git", "checkout", "-b", branch_name])
 #     subprocess.run(["git", "add", file_path])
@@ -71,34 +81,34 @@ def extract_failing_file_path(stack_trace):
 #     subprocess.run(["git", "push", "origin", branch_name])
 #
 #     # GitHub CLI command to create PR
-#     os.environ["GH_TOKEN"] = os.environ["GITHUB_TOKEN"]
+#     os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN")
 #     subprocess.run([
 #         "gh", "pr", "create",
 #         "--title", "🤖 AI Auto-Fix: NullPointerException",
-#         "--body", "This PR was generated automatically to fix a NullPointerException detected during the CI pipeline. **Please review the logic before merging.**",
+#         "--body", "This PR was generated automatically by Claude to fix a NullPointerException detected during the CI pipeline. **Please review the logic before merging.**",
 #         "--base", "master",
 #         "--head", branch_name
 #     ])
 #     print("Pull Request created successfully!")
 
 if __name__ == "__main__":
-    print("Starting Self-Healing Analysis...")
+    print("Starting Self-Healing Analysis with Claude...")
     stack_trace = find_npe_in_reports()
 
     if stack_trace:
         print("NPE detected. Locating faulty file...")
         file_path = extract_failing_file_path(stack_trace)
-#
+
         if file_path:
             print(f"Found faulty file: {file_path}. Generating fix...")
-#             fixed_code = generate_fix(file_path, stack_trace)
-#
-#             print("Writing fix to file...")
-#             with open(file_path, 'w') as file:
-#                 file.write(fixed_code)
-#
-#             print("Creating Pull Request...")
-#             create_pull_request(file_path)
+            fixed_code = generate_fix(file_path, stack_trace)
+
+            print("Writing fix to file...", fixed_code)
+            # with open(file_path, 'w') as file:
+            #     file.write(fixed_code)
+            #
+            # print("Creating Pull Request...")
+            # create_pull_request(file_path)
         else:
             print("Could not map stack trace to a local file.")
     else:

@@ -45,8 +45,12 @@ jobs:
       - name: Stage 4 - AI Self-Healing Agent
         # ONLY runs if the previous Maven Test step fails
         if: failure()
+        env:
+          # This maps the secret to an environment variable in the Ubuntu runner
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
+          pip install anthropic
           python .github/scripts/self_healer.py
 
       - name: Stage 5 - Print Result
