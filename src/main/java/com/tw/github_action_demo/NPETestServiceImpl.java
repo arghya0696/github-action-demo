@@ -3,7 +3,7 @@ package com.tw.github_action_demo;
 public class NPETestServiceImpl {
 
     public void testNPE() {
-        Integer p = 10;
+        Integer p = null;
         System.out.println(p.compareTo(10));
     }
 }
