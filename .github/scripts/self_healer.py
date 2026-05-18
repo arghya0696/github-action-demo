@@ -167,6 +167,7 @@ if __name__ == "__main__":
         print(f"Analysis complete. Analyzing cause: {exc_type}. Locating faulty file...")
 
         # This will now trigger the new AI extraction method
+        print("stack trace: ", stack_trace)
         file_path = extract_failing_file_path(stack_trace)
 
         if file_path:
