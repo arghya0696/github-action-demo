@@ -2,9 +2,10 @@ name: Spring Boot Build and Test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ * ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ * ]
+  workflow_dispatch:  # Allow manual trigger for testing
 
 # Grants the GITHUB_TOKEN permission to push branches and create PRs
 permissions:
