@@ -25,9 +25,9 @@ jobs:
         with:
           fetch-depth: 0 # Important: Fetch all history for git push to work
 
-      - name: Setup GitHub CLI
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token  
+      # - name: Setup GitHub CLI
+      #   run: |
+      #     echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token  
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
