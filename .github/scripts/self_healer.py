@@ -3,7 +3,6 @@ import glob
 import subprocess
 import re
 import anthropic
-from git_manager import GitManager
 from typing import List, Dict, Optional
 from datetime import datetime
 import logging
