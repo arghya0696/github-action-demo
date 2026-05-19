@@ -5,13 +5,9 @@ import re
 import anthropic
 from pathlib import Path
 from git_manager import GitManager
+from typing import List, Dict, Optional
+import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-
-logger = logging.getLogger(__name__)
 # 1. Initialize the Anthropic client
 api_key = os.environ.get("ANTHROPIC_API_KEY")
 if not api_key:
