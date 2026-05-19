@@ -3,7 +3,18 @@ import glob
 import subprocess
 import re
 import anthropic
+from git_manager import GitManager
+from typing import List, Dict, Optional
+from datetime import datetime
+import logging
+import traceback
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+logger = logging.getLogger(__name__)
 # 1. Initialize the Anthropic client
 api_key = os.environ.get("ANTHROPIC_API_KEY")
 if not api_key:
@@ -90,53 +101,236 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards):
     fixed_code = message.content[0].text.replace('```java', '').replace('```', '').strip()
     return fixed_code
 
-# def create_pull_request(file_path, exc_type):
-#     """Creates a git branch, commits the fix, and raises a PR."""
-#     short_exc_name = exc_type.split('.')[-1]
-#     branch_name = f"ai-fix-{short_exc_name.lower()}"
-#
-#     subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer (Claude)"])
-#     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
-#
-#     subprocess.run(["git", "checkout", "-B", branch_name])
-#     subprocess.run(["git", "add", file_path])
-#     subprocess.run(["git", "commit", "-m", f"🤖 AI Auto-Fix: Resolved {short_exc_name}"])
-#     subprocess.run(["git", "push", "-f", "origin", branch_name])
-#
-#     os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN")
-#     subprocess.run([
-#         "gh", "pr", "create",
-#         "--title", f"🤖 AI Auto-Fix: {short_exc_name}",
-#         "--body", f"This PR was generated automatically by Claude to fix a `{exc_type}` detected during the CI pipeline.\n\n**Note:** Claude was instructed to follow the rules defined in `coding-standards.md`.",
-#         "--base", "master",
-#         "--head", branch_name
-#     ])
-#     print("Pull Request created successfully!")
+def _run_command(command: List[str], cwd: str = ".") -> str:
+    """
+    Execute shell command safely and return stdout.
+    """
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        return result.stdout.strip()
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Command failed: {' '.join(command)}")
+        logger.error(e.stderr)
+
+        raise RuntimeError(
+            f"Git command failed: {' '.join(command)}"
+        ) from e
+
+
+def create_pr_and_commit(fixes_applied: List[Dict]) -> Optional[str]:
+    """
+    Commit AI-generated fixes and create GitHub PR.
+    """
+
+    if not fixes_applied:
+        logger.warning("No fixes to commit.")
+        return None
+
+    try:
+        # Configure git identity
+        git_user = os.getenv("GIT_USER_NAME", "github-actions[bot]")
+        git_email = os.getenv(
+            "GIT_USER_EMAIL",
+            "41898282+github-actions[bot]@users.noreply.github.com"
+        )
+
+        _run_command(["git", "config", "user.name", git_user])
+        _run_command(["git", "config", "user.email", git_email])
+
+        # Create branch
+        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        branch_name = f"autoheal/{timestamp}"
+
+        logger.info(f"Creating branch: {branch_name}")
+
+        _run_command(["git", "checkout", "-b", branch_name])
+
+        # Stage files
+        fixed_files = []
+
+        for fix in fixes_applied:
+            file_path = fix.get("file")
+
+            if file_path and os.path.exists(file_path):
+                fixed_files.append(file_path)
+
+        if not fixed_files:
+            logger.warning("No files available to commit.")
+            return None
+
+        _run_command(["git", "add"] + fixed_files)
+
+        # Validate staged changes
+        staged = _run_command(
+            ["git", "diff", "--cached", "--name-only"]
+        )
+
+        if not staged.strip():
+            logger.warning("No staged changes detected.")
+            return None
+
+        exceptions = sorted(
+            list({
+                fix.get("exception", "UnknownException")
+                for fix in fixes_applied
+            })
+        )
+
+        commit_message = (
+            f"fix(ci): automated remediation for "
+            f"{', '.join(exceptions)}"
+        )
+
+        logger.info("Creating commit...")
+
+        _run_command([
+            "git",
+            "commit",
+            "-m",
+            commit_message
+        ])
+
+        logger.info("Pushing branch...")
+
+        _run_command([
+            "git",
+            "push",
+            "--set-upstream",
+            "origin",
+            branch_name
+        ])
+
+        logger.info("Creating PR...")
+
+        pr_body = f"""
+## Automated Self-Healing Fix
+
+### Fixed Exceptions
+{chr(10).join(f"- {e}" for e in exceptions)}
+
+### Modified Files
+{chr(10).join(f"- {f}" for f in fixed_files)}
+
+Generated automatically by AI remediation pipeline.
+"""
+
+        pr_url = _run_command([
+            "gh",
+            "pr",
+            "create",
+            "--title",
+            commit_message,
+            "--body",
+            pr_body,
+            "--base",
+            "main",
+            "--head",
+            branch_name
+        ])
+
+        logger.info(f"PR Created: {pr_url}")
+
+        return pr_url
+
+    except Exception as e:
+        logger.error(str(e))
+        logger.error(traceback.format_exc())
+
+        return None
 
 if __name__ == "__main__":
-    print(f"Starting Self-Healing Analysis looking for: {TARGET_EXCEPTIONS}")
 
-    # Read the standards first
-    standards = get_coding_standards(".github/scripts/coding-standards.md")
+    print(f"Starting Self-Healing Analysis for: {TARGET_EXCEPTIONS}")
 
+    fixes_applied = []
+
+    # Load coding standards
+    standards = get_coding_standards(
+        ".github/scripts/coding-standards.md"
+    )
+
+    # Detect failing exception
     stack_trace, exc_type = find_exception_in_reports()
 
     if stack_trace and exc_type:
-        print(f"{exc_type} detected. Locating faulty file...")
+
+        print(f"{exc_type} detected.")
+
         file_path = extract_failing_file_path(stack_trace)
 
         if file_path:
-            print(f"Found faulty file: {file_path}. Generating fix...")
-            # Pass the standards to the AI generator
-            fixed_code = generate_fix(file_path, stack_trace, exc_type, standards)
 
-            print("Writing fix to file...", fixed_code)
-            # with open(file_path, 'w') as file:
-            #     file.write(fixed_code)
-            #
-            # print("Creating Pull Request...")
-            # create_pull_request(file_path, exc_type)
+            print(f"Faulty file located: {file_path}")
+
+            fixed_code = generate_fix(
+                file_path,
+                stack_trace,
+                exc_type,
+                standards
+            )
+
+            # Backup original file
+            backup_path = f"{file_path}.bak"
+
+            with open(file_path, "r") as original:
+                original_content = original.read()
+
+            with open(backup_path, "w") as backup:
+                backup.write(original_content)
+
+            # Write fixed code
+            with open(file_path, "w") as updated:
+                updated.write(fixed_code)
+
+            print(f"Applied fix to: {file_path}")
+
+            # Run Maven tests
+            print("Running Maven verification...")
+
+            test_result = subprocess.run(
+                ["mvn", "test"],
+                capture_output=True,
+                text=True
+            )
+
+            if test_result.returncode == 0:
+
+                print("Tests passed successfully.")
+
+                fixes_applied.append({
+                    "file": file_path,
+                    "exception": exc_type
+                })
+
+                pr_url = create_pr_and_commit(fixes_applied)
+
+                if pr_url:
+                    print(f"Pull Request created: {pr_url}")
+                else:
+                    print("Failed to create Pull Request.")
+
+            else:
+
+                print("Tests failed after remediation.")
+                print(test_result.stdout)
+                print(test_result.stderr)
+
+                # Restore backup
+                with open(file_path, "w") as restore:
+                    restore.write(original_content)
+
+                print("Original file restored.")
+
         else:
-            print("Could not map stack trace to a local file.")
+            print("Could not map stack trace to source file.")
+
     else:
-        print("No target exceptions detected in test reports.")
+        print("No target exceptions found.")
