@@ -32,7 +32,7 @@ public class SonarService {
             final int x = Integer.parseInt(val);
             LOGGER.info(String.valueOf(x));
         } catch (NumberFormatException e) {
-            LOGGER.warning("Failed to parse value: " + val);
+            LOGGER.warning(() -> "Failed to parse value: " + val);
         }
     }
 
