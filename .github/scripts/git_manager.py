@@ -60,27 +60,6 @@ class GitManager:
         except Exception as e:
             logger.warning(f"Could not configure git: {str(e)}")
     
-    def _get_base_branch(self) -> str:
-        """
-        Determine the branch that triggered the workflow.
-        """
-
-        # For pull_request events
-        github_head_ref = os.environ.get("GITHUB_HEAD_REF")
-        if github_head_ref:
-            logger.info(f"Using PR source branch: {github_head_ref}")
-            return github_head_ref
-
-        # For push events
-        github_ref_name = os.environ.get("GITHUB_REF_NAME")
-        if github_ref_name:
-            logger.info(f"Using push branch: {github_ref_name}")
-            return github_ref_name
-
-        # Fallback
-        logger.warning("Could not determine triggering branch. Falling back to main.")
-        return "main"
-    
     def commit_changes(
         self, 
         files: List[str],
@@ -134,7 +113,29 @@ class GitManager:
         except Exception as e:
             logger.error(f"Failed to commit: {str(e)}")
             return False
-    
+
+
+    def create_branch(self, prefix: str = "ai-fix") -> str:
+        """
+        Create a new feature branch for fixes.
+        """
+
+        self.original_branch = self._get_current_branch()
+
+        logger.info(f"Original branch: {self.original_branch}")
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        branch_name = f"{prefix}-{timestamp}"
+
+        self._run_git_command(
+            ["checkout", "-b", branch_name],
+            f"Creating branch {branch_name}"
+        )
+
+        logger.info(f"✓ Created branch: {branch_name}")
+
+        return branch_name
+
     def push_branch(self, branch_name: str) -> bool:
         """
         Push feature branch to remote.
