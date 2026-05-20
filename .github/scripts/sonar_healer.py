@@ -146,40 +146,19 @@ Return ONLY the raw updated Java code. Do not include markdown formatting like `
     return fixed_code
 
 
-def create_pull_request(changed_files):
-    """Commits fixes to a new branch and raises a PR against the triggering branch."""
-    base_branch = os.environ.get("GITHUB_REF_NAME", "master")
-    branch_name = f"ai-fix-sonar-{base_branch}"
+def commit_fixes(changed_files):
+    """Commits fixes directly to the current branch and pushes."""
+    current_branch = os.environ.get("GITHUB_REF_NAME", "master")
 
     subprocess.run(["git", "config", "--global", "user.name", "AI Sonar Self-Healer"])
     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
-    subprocess.run(["git", "checkout", "-B", branch_name])
 
     for f in changed_files:
         subprocess.run(["git", "add", f])
 
     subprocess.run(["git", "commit", "-m", "fix: AI auto-fix for SonarCloud issues"])
-    subprocess.run(["git", "push", "-f", "origin", branch_name])
-
-    os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN", "")
-    result = subprocess.run([
-        "gh", "pr", "create",
-        "--title", f"fix: AI auto-fix for SonarCloud issues ({base_branch})",
-        "--body", (
-            "This PR was generated automatically by Claude to fix SonarCloud issues "
-            "(bugs, vulnerabilities, code smells) detected during the CI pipeline.\n\n"
-            "**Note:** Claude was instructed to follow the rules defined in `coding-standards.md`."
-        ),
-        "--base", base_branch,
-        "--head", branch_name
-    ], capture_output=True, text=True)
-
-    if result.returncode == 0:
-        print(f"Pull Request created against '{base_branch}': {result.stdout.strip()}")
-    elif "already exists" in result.stderr:
-        print(f"PR already exists for '{branch_name}' -> '{base_branch}'. Branch was force-pushed with latest fixes.")
-    else:
-        print(f"PR creation failed: {result.stderr.strip()}")
+    subprocess.run(["git", "push", "origin", f"HEAD:{current_branch}"])
+    print(f"Fixes committed and pushed to '{current_branch}'.")
 
 
 if __name__ == "__main__":
@@ -207,7 +186,7 @@ if __name__ == "__main__":
             changed_files.append(file_path)
 
     if changed_files:
-        print(f"\nFixed {len(changed_files)} file(s). Creating Pull Request...")
-        create_pull_request(changed_files)
+        print(f"\nFixed {len(changed_files)} file(s). Committing fixes...")
+        commit_fixes(changed_files)
     else:
         print("No local files were fixable.")
