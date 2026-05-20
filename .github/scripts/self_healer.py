@@ -8,6 +8,7 @@ from pathlib import Path
 from git_manager import GitManager
 from typing import List, Dict, Optional
 import logging
+import shutil
 
 # 1. Initialize the Anthropic client
 api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -177,49 +178,90 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         return None
 
 if __name__ == "__main__":
-    workspace = Path(os.getcwd())
+    if __name__ == "__main__":
+        workspace = Path(os.getcwd())
     git_manager = GitManager(workspace)
-    fixes_applied = []
 
-    # Load Skills and Standards
+    # Track unique files modified across all attempts
+    modified_files_map = {}
+
     skills = load_skills(".github/scripts/ai-skills.json")
     standards = get_coding_standards(".github/scripts/coding-standards.md")
 
-    stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []))
+    MAX_RETRIES = 3
+    attempt = 1
+    success = False
 
-    if stack_trace and exc_type:
+    logger.info(f"Starting Self-Healing Loop (Max Attempts: {MAX_RETRIES})")
+
+    while attempt <= MAX_RETRIES:
+        logger.info(f"--- Attempt {attempt} of {MAX_RETRIES} ---")
+
+        stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []))
+
+        if not stack_trace or not exc_type:
+            if attempt == 1:
+                logger.info("No target exceptions or test failures detected in initial reports.")
+            else:
+                # If we are in a retry loop and find no exceptions, it means the tests passed!
+                # Note: This is a fallback in case the subprocess return code was strange.
+                logger.info("No more exceptions found. Fix appears successful!")
+                success = True
+            break
+
         logger.info(f"Analyzing cause: {exc_type}")
-
-        # Extracted to return a list of files rather than just one
         failing_files = get_failing_files_from_ai(stack_trace, skills)
 
-        if failing_files:
-            logger.info(f"AI identified failing files: {failing_files}. Generating fixes...")
+        if not failing_files:
+            logger.warning("Could not map stack trace to local files. Breaking loop.")
+            break
 
-            # Iterate through all files identified by the AI and apply fixes
-            for file_path in failing_files:
-                fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
-                with open(file_path, "w") as file:
-                    file.write(fixed_code)
-                    print("fixed code: ", fixed_code)
+        logger.info(f"AI identified failing files: {failing_files}. Generating fixes...")
 
-                fixes_applied.append({"file": file_path, "exception": exc_type})
+        # 1. Apply Fixes
+        for file_path in failing_files:
+            fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
+            with open(file_path, "w") as file:
+                file.write(fixed_code)
 
-            # Validate all fixes at once
-            logger.info("Running Maven test to validate fixes...")
-            test_result = subprocess.run(["mvn", "test"], capture_output=True, text=True)
+            # Track the modified file
+            modified_files_map[file_path] = exc_type
 
-            if test_result.returncode == 0:
-                logger.info("Tests passed! Generating Pull Request...")
-                pr_url = create_pr_and_commit(git_manager, fixes_applied)
-                if pr_url:
-                    print(f"PR Created: {pr_url}")
-                else:
-                    print("Failed to create PR.")
-            else:
-                logger.error("Fix validation failed. Tests still not passing.")
-                # print(test_result.stdout)
+        # 2. Cleanup Old Reports before testing again
+        reports_dir = "target/surefire-reports"
+        if os.path.exists(reports_dir):
+            shutil.rmtree(reports_dir)
+            logger.info("Cleaned up old surefire reports.")
+
+        # 3. Validate
+        logger.info("Running Maven test to validate fixes...")
+        test_result = subprocess.run(["mvn", "test"], capture_output=True, text=True)
+
+        if test_result.returncode == 0:
+            logger.info("✅ Tests passed successfully!")
+            success = True
+            break
         else:
-            logger.warning("Could not map stack trace to local files. Unable to proceed with auto-fix.")
-    else:
-        logger.info("No target exceptions or test failures detected in reports.")
+            logger.error(f"❌ Fix validation failed on attempt {attempt}.")
+            # Check if it was a compilation error (no surefire reports will be generated)
+            if not os.path.exists(reports_dir):
+                logger.error("Compilation failed. The AI generated invalid Java syntax.")
+                logger.error("Check the Action logs for details. Aborting loop.")
+                break
+
+            attempt += 1
+
+    # Final PR Creation Step
+    if success and modified_files_map:
+        logger.info("Generating Pull Request with all accumulated fixes...")
+
+        # Convert our map back to the list format the PR function expects
+        fixes_applied = [{"file": path, "exception": exc} for path, exc in modified_files_map.items()]
+
+        pr_url = create_pr_and_commit(git_manager, fixes_applied)
+        if pr_url:
+            print(f"🎉 PR Created: {pr_url}")
+        else:
+            print("Failed to create PR.")
+    elif not success and modified_files_map:
+        logger.error("All AI attempts failed. The local files were modified, but tests are still failing. No PR will be created.")
