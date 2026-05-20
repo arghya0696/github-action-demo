@@ -147,8 +147,9 @@ Return ONLY the raw updated Java code. Do not include markdown formatting like `
 
 
 def create_pull_request(changed_files):
-    """Commits fixes to a new branch and raises a PR."""
-    branch_name = "ai-fix-sonar-issues"
+    """Commits fixes to a new branch and raises a PR against the triggering branch."""
+    base_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    branch_name = f"ai-fix-sonar-{base_branch}"
 
     subprocess.run(["git", "config", "--global", "user.name", "AI Sonar Self-Healer"])
     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
@@ -163,16 +164,16 @@ def create_pull_request(changed_files):
     os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN", "")
     subprocess.run([
         "gh", "pr", "create",
-        "--title", "fix: AI auto-fix for SonarCloud issues",
+        "--title", f"fix: AI auto-fix for SonarCloud issues ({base_branch})",
         "--body", (
             "This PR was generated automatically by Claude to fix SonarCloud issues "
             "(bugs, vulnerabilities, code smells) detected during the CI pipeline.\n\n"
             "**Note:** Claude was instructed to follow the rules defined in `coding-standards.md`."
         ),
-        "--base", "master",
+        "--base", base_branch,
         "--head", branch_name
     ])
-    print("Pull Request created successfully!")
+    print(f"Pull Request created against '{base_branch}' successfully!")
 
 
 if __name__ == "__main__":
