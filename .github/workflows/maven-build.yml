@@ -50,10 +50,12 @@ jobs:
 
       - name: Stage 2 - Run Maven Clean Install
         run: mvn clean install
+        continue-on-error: true
+        id: maven_test
 
       - name: Stage 4 - AI Self-Healing Agent
         # ONLY runs if the previous Maven Test step fails
-        if: failure()
+        if: failure() || steps.maven_test.outcome == 'failure'
         env:
           # This maps the secret to an environment variable in the Ubuntu runner
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -73,11 +75,19 @@ jobs:
   # ============================================
   validate-ai-fix:
     needs: build
-    if: failure()  # Only run if main build failed
+    if: needs.build.result == 'failure'
     runs-on: ubuntu-latest
     continue-on-error: true
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt update
+          sudo apt install gh -y
+
       - name: Check for AI-Generated PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
