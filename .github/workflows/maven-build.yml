@@ -34,7 +34,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python Dependencies
-        run: pip install google-generativeai
+        run: pip install anthropic requests
 
       - name: Stage 1 - Print starting
         run: echo "Starting..."
@@ -42,17 +42,44 @@ jobs:
       - name: Stage 2 - Run Maven Clean Install
         run: mvn clean install
 
-      - name: Stage 4 - AI Self-Healing Agent
-        # ONLY runs if the previous Maven Test step fails
+      - name: Stage 3 - SonarCloud Analysis
+        if: always()
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+
+      - name: Stage 4 - AI Self-Healing Agent (test failures)
+        # ONLY runs if the Maven build/test step fails
         if: failure()
         env:
-          # This maps the secret to an environment variable in the Ubuntu runner
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_EXCEPTIONS: "java.lang.NullPointerException,java.lang.ClassCastException,java.lang.IndexOutOfBoundsException,java.lang.IllegalArgumentException"
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
-          pip install anthropic
           python .github/scripts/self_healer.py
+
+      - name: Stage 4b - AI Sonar Self-Healing Agent
+        # Runs after Sonar analysis regardless of build outcome
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          SONAR_MIN_SEVERITY: "MAJOR"
+        run: |
+          echo "Invoking AI Sonar self-healing script..."
+          python .github/scripts/sonar_healer.py
 
       - name: Stage 5 - Print Result
         if: always()

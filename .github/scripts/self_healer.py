@@ -90,28 +90,28 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards):
     fixed_code = message.content[0].text.replace('```java', '').replace('```', '').strip()
     return fixed_code
 
-# def create_pull_request(file_path, exc_type):
-#     """Creates a git branch, commits the fix, and raises a PR."""
-#     short_exc_name = exc_type.split('.')[-1]
-#     branch_name = f"ai-fix-{short_exc_name.lower()}"
-#
-#     subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer (Claude)"])
-#     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
-#
-#     subprocess.run(["git", "checkout", "-B", branch_name])
-#     subprocess.run(["git", "add", file_path])
-#     subprocess.run(["git", "commit", "-m", f"🤖 AI Auto-Fix: Resolved {short_exc_name}"])
-#     subprocess.run(["git", "push", "-f", "origin", branch_name])
-#
-#     os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN")
-#     subprocess.run([
-#         "gh", "pr", "create",
-#         "--title", f"🤖 AI Auto-Fix: {short_exc_name}",
-#         "--body", f"This PR was generated automatically by Claude to fix a `{exc_type}` detected during the CI pipeline.\n\n**Note:** Claude was instructed to follow the rules defined in `coding-standards.md`.",
-#         "--base", "master",
-#         "--head", branch_name
-#     ])
-#     print("Pull Request created successfully!")
+def create_pull_request(file_path, exc_type):
+    """Creates a git branch, commits the fix, and raises a PR."""
+    short_exc_name = exc_type.split('.')[-1]
+    branch_name = f"ai-fix-{short_exc_name.lower()}"
+
+    subprocess.run(["git", "config", "--global", "user.name", "AI Self-Healer (Claude)"], check=False)
+    subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=False)
+
+    subprocess.run(["git", "checkout", "-B", branch_name], check=True)
+    subprocess.run(["git", "add", file_path], check=True)
+    subprocess.run(["git", "commit", "-m", f"fix: AI auto-fix for {short_exc_name}"], check=True)
+    subprocess.run(["git", "push", "-f", "origin", branch_name], check=True)
+
+    os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN", "")
+    subprocess.run([
+        "gh", "pr", "create",
+        "--title", f"fix: AI auto-fix for {short_exc_name}",
+        "--body", f"This PR was generated automatically by Claude to fix a `{exc_type}` detected during the CI pipeline.\n\n**Note:** Claude was instructed to follow the rules defined in `coding-standards.md`.",
+        "--base", "master",
+        "--head", branch_name
+    ], check=True)
+    print("Pull Request created successfully!")
 
 if __name__ == "__main__":
     print(f"Starting Self-Healing Analysis looking for: {TARGET_EXCEPTIONS}")
@@ -130,12 +130,12 @@ if __name__ == "__main__":
             # Pass the standards to the AI generator
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards)
 
-            print("Writing fix to file...", fixed_code)
-            # with open(file_path, 'w') as file:
-            #     file.write(fixed_code)
-            #
-            # print("Creating Pull Request...")
-            # create_pull_request(file_path, exc_type)
+            print("Writing fix to file...")
+            with open(file_path, 'w') as file:
+                file.write(fixed_code)
+
+            print("Creating Pull Request...")
+            create_pull_request(file_path, exc_type)
         else:
             print("Could not map stack trace to a local file.")
     else:
