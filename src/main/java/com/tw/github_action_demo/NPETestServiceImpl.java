@@ -6,6 +6,6 @@ public class NPETestServiceImpl {
 
     public void testNPE() {
         final Integer p = null;
-        System.out.println(p.compareTo(10));
+        Optional.ofNullable(p).ifPresent(value -> System.out.println(value.compareTo(10)));
     }
 }
