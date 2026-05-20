@@ -201,6 +201,7 @@ if __name__ == "__main__":
                 fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
                 with open(file_path, "w") as file:
                     file.write(fixed_code)
+                    print("fixed code: ", fixed_code)
 
                 fixes_applied.append({"file": file_path, "exception": exc_type})
 
