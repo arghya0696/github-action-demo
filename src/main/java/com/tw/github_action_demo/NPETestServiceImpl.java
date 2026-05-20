@@ -4,8 +4,6 @@ import java.util.Optional;
 
 public class NPETestServiceImpl {
 
-    private static final Logger LOGGER = Logger.getLogger(NPETestServiceImpl.class.getName());
-
     public void testNPE() {
         final Integer p = null;
         Optional.ofNullable(p)

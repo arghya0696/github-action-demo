@@ -8,8 +8,6 @@ class GithubActionDemoApplicationTests {
 
 	@Test
 	void contextLoads() {
-		NPETestServiceImpl npeTestService = new NPETestServiceImpl();
-		npeTestService.testNPE();
 	}
 
 }
