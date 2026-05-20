@@ -162,7 +162,7 @@ def create_pull_request(changed_files):
     subprocess.run(["git", "push", "-f", "origin", branch_name])
 
     os.environ["GH_TOKEN"] = os.environ.get("GITHUB_TOKEN", "")
-    subprocess.run([
+    result = subprocess.run([
         "gh", "pr", "create",
         "--title", f"fix: AI auto-fix for SonarCloud issues ({base_branch})",
         "--body", (
@@ -172,8 +172,14 @@ def create_pull_request(changed_files):
         ),
         "--base", base_branch,
         "--head", branch_name
-    ])
-    print(f"Pull Request created against '{base_branch}' successfully!")
+    ], capture_output=True, text=True)
+
+    if result.returncode == 0:
+        print(f"Pull Request created against '{base_branch}': {result.stdout.strip()}")
+    elif "already exists" in result.stderr:
+        print(f"PR already exists for '{branch_name}' -> '{base_branch}'. Branch was force-pushed with latest fixes.")
+    else:
+        print(f"PR creation failed: {result.stderr.strip()}")
 
 
 if __name__ == "__main__":
