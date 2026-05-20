@@ -34,7 +34,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python Dependencies
-        run: pip install google-generativeai
+        run: pip install anthropic requests
 
       - name: Stage 1 - Print starting
         run: echo "Starting..."
@@ -42,19 +42,34 @@ jobs:
       - name: Stage 2 - Run Maven Clean Install
         run: mvn clean install
 
-      - name: Stage 4 - AI Self-Healing Agent
-        # ONLY runs if the previous Maven Test step fails
+      - name: Stage 3 - SonarCloud Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn sonar:sonar -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+
+      - name: Stage 4 - AI Self-Healing Agent (Test Failures)
         if: failure()
         env:
-          # This maps the secret to an environment variable in the Ubuntu runner
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TARGET_EXCEPTIONS: "java.lang.NullPointerException,java.lang.ClassCastException,java.lang.IndexOutOfBoundsException,java.lang.IllegalArgumentException"
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
-          pip install anthropic
           python .github/scripts/self_healer.py
 
-      - name: Stage 5 - Print Result
+      - name: Stage 5 - AI Sonar Self-Healing Agent
+        if: always()
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Running Sonar self-healing..."
+          python .github/scripts/sonar_healer.py
+
+      - name: Stage 6 - Print Result
         if: always()
         run: |
           echo "Done with test. Result: ${{ job.status }}"
