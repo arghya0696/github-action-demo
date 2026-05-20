@@ -1,7 +1,6 @@
 package com.tw.github_action_demo;
 
 import java.util.Optional;
-import java.util.logging.Logger;
 
 public class NPETestServiceImpl {
 
@@ -10,6 +9,7 @@ public class NPETestServiceImpl {
     public void testNPE() {
         final Integer p = null;
         Optional.ofNullable(p)
-                .ifPresent(value -> LOGGER.info(String.valueOf(value.compareTo(10))));
+                .ifPresent(value -> System.out.println(value.compareTo(10)));
+
     }
 }
