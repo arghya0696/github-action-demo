@@ -4,10 +4,8 @@ import java.util.Objects;
 
 
 public class TestService {
-    private final NPETestServiceImpl npeTestService;
-    public TestService(final NPETestServiceImpl npeTestService) {
-        this.npeTestService = Objects.requireNonNull(npeTestService, "npeTestService must not be null");
-    }
+    private NPETestServiceImpl npeTestService;
+
     void test() {
         npeTestService.testNPE();
     }
