@@ -96,7 +96,7 @@ jobs:
           
           # List recent PRs with AI label
           gh pr list \
-            --search "label:🤖-ai-generated" \
+            --search "label:ai-generated" \
             --state open \
             --limit 5 \
             --json number,title,createdAt
