@@ -30,7 +30,7 @@ public class SonarService {
     public void riskyParse(final String val) {
         try {
             final int x = Integer.parseInt(val);
-            LOGGER.info(String.valueOf(x));
+            LOGGER.info(() -> String.valueOf(x));
         } catch (NumberFormatException e) {
             LOGGER.warning(() -> "Failed to parse value: " + val);
         }
