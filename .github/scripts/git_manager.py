@@ -236,7 +236,7 @@ class GitManager:
                     "--body", body,
                     "--head", head,
                     "--base", base,
-                    "--repo", self.github_repo
+                    "--repo", self.github_repo,
                     "--label", "ai-generated"
                 ],
                 cwd=self.workspace,
