@@ -2,9 +2,9 @@ name: Spring Boot Build and Test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "sonar-setup" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "sonar-setup" ]
 
 # Grants the GITHUB_TOKEN permission to push branches and create PRs
 permissions:
