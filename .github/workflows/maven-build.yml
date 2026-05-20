@@ -67,6 +67,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Running Sonar self-healing..."
+          echo "--- Sonar report task file ---"
+          find target -name "report-task.txt" 2>/dev/null || echo "report-task.txt not found"
           python .github/scripts/sonar_healer.py
 
       - name: Stage 6 - Print Result
