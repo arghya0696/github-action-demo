@@ -27,7 +27,7 @@ public class OrderService {
     }
 
     public void printOrder(String orderId) {
-        logger.info(() -> String.format("Processing order: %s", orderId));
+        logger.info(() -> "Processing order: " + orderId);
     }
 
     public String buildSummary(String orderId) {
