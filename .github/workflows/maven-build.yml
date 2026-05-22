@@ -2,7 +2,7 @@ name: Spring Boot Build and Test
 
 on:
   push:
-    branches: '**' 
+    branches: '**'
   pull_request:
     branches: '**'
   workflow_dispatch:  # Allow manual trigger for testing
@@ -62,7 +62,44 @@ jobs:
           pip install anthropic
           python .github/scripts/self_healer.py
 
-      - name: Stage 5 - Print Result
+      - name: Stage 5 - Upload AI PR Metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-pr-metadata
+          path: ai_pr_metadata.json
+          if-no-files-found: ignore
+
+      - name: Stage 6 - Print Result
         if: always()
         run: |
           echo "Done with test. Result: ${{ job.status }}"
+
+  # ============================================
+  # Optional: Validation Job for Generated PRs
+  # ============================================
+  validate-ai-fix:
+    needs: build
+    if: needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Download PR Metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-pr-metadata
+
+      - name: Read PR Metadata
+        id: pr_metadata
+        run: |
+          cat ai_pr_metadata.json
+          PR_URL=$(jq -r '.pr_url' ai_pr_metadata.json)
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+
+      - name: Run Quality Checks on AI Fixes
+        run: |
+          echo "Future: Implement automated review of AI-generated code"
+          echo "- Run linters on changed files"
+          echo "- Check test coverage"
+          echo "- Verify compilation"
