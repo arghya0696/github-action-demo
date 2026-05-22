@@ -184,6 +184,12 @@ def run_sonar_healing():
         print("Sonar healing skipped: ANTHROPIC_API_KEY, SONAR_TOKEN, and SONAR_PROJECT_KEY must all be set.")
         return
 
+    current_branch = os.environ.get("GITHUB_REF_NAME", "")
+    if current_branch != "master":
+        print(f"Sonar scan skipped: only runs on master (current branch: '{current_branch}').")
+        print("Sonar healing skipped: scan was not performed.")
+        return
+
     client = anthropic.Anthropic(api_key=anthropic_key)
     coding_standards = get_coding_standards()
 
