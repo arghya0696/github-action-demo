@@ -28,8 +28,8 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<sonar.organization>sreelakshmiadiga</sonar.organization>
-		<sonar.projectKey>sreelakshmiadiga_github-action-demo</sonar.projectKey>
+		<sonar.organization>arghya0696</sonar.organization>
+		<sonar.projectKey>arghya0696_github-action-demo</sonar.projectKey>
 		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
 	</properties>
 	<dependencies>
