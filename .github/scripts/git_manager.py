@@ -62,33 +62,35 @@ class GitManager:
     
     def create_branch(self, prefix: str = "ai-fix") -> str:
         """
-        Create a new feature branch for fixes.
-        
-        Branch naming convention: ai-fix-{timestamp}
+        Create or reuse a shared fix branch for the current CI run.
+
+        Branch naming convention: {prefix}-{GITHUB_RUN_ID or YYYYMMDD}
+        Both healers in the same workflow run resolve to the same branch name,
+        so all automated fixes land on one branch instead of separate ones.
         """
         try:
-            # Ensure we're on main branch first
             current_branch = self._get_current_branch()
             logger.info(f"Current branch: {current_branch}")
-            
-            # Create descriptive branch name
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            branch_name = f"{prefix}-{timestamp}"
-            
-            # Check if branch already exists
+
+            run_id = os.environ.get("GITHUB_RUN_ID", datetime.now().strftime("%Y%m%d"))
+            branch_name = f"{prefix}-{run_id}"
+
             if self._branch_exists(branch_name):
-                logger.warning(f"Branch {branch_name} already exists")
-                branch_name = f"{branch_name}-{int(time.time() % 1000)}"
-            
-            # Create and checkout new branch
-            self._run_git_command(
-                ["checkout", "-b", branch_name],
-                f"Creating branch {branch_name}"
-            )
-            
-            logger.info(f"✓ Created branch: {branch_name}")
+                # Reuse the existing branch so all fixes accumulate on one branch
+                logger.info(f"Branch {branch_name} already exists, checking it out")
+                self._run_git_command(
+                    ["checkout", branch_name],
+                    f"Checking out existing branch {branch_name}"
+                )
+            else:
+                self._run_git_command(
+                    ["checkout", "-b", branch_name],
+                    f"Creating branch {branch_name}"
+                )
+
+            logger.info(f"✓ On branch: {branch_name}")
             return branch_name
-        
+
         except Exception as e:
             logger.error(f"Failed to create branch: {str(e)}")
             raise

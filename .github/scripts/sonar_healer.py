@@ -1,8 +1,12 @@
 import os
-import subprocess
+import sys
 import time
 import requests
 import anthropic
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(__file__))
+from git_manager import GitManager
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 SONAR_TOKEN = os.environ.get("SONAR_TOKEN")
@@ -147,18 +151,26 @@ Return ONLY the raw updated Java code. Do not include markdown formatting like `
 
 
 def commit_fixes(changed_files):
-    """Commits fixes directly to the current branch and pushes."""
-    current_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    """Creates a new branch from the source branch, commits fixes, and pushes."""
+    workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
+    git = GitManager(workspace)
 
-    subprocess.run(["git", "config", "--global", "user.name", "AI Sonar Self-Healer"])
-    subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
+    source_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    print(f"Source branch with Sonar issues: {source_branch}")
 
-    for f in changed_files:
-        subprocess.run(["git", "add", f])
+    branch_name = git.create_branch()
+    print(f"Created new branch: {branch_name}")
 
-    subprocess.run(["git", "commit", "-m", "fix: AI auto-fix for SonarCloud issues"])
-    subprocess.run(["git", "push", "origin", f"HEAD:{current_branch}"])
-    print(f"Fixes committed and pushed to '{current_branch}'.")
+    committed = git.commit_changes(
+        files=changed_files,
+        message="fix: AI auto-fix for SonarCloud issues"
+    )
+
+    if committed:
+        git.push_branch(branch_name)
+        print(f"Fixes committed and pushed to new branch '{branch_name}'.")
+    else:
+        print("No changes to commit.")
 
 
 if __name__ == "__main__":
