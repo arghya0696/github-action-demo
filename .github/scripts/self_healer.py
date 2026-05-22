@@ -30,7 +30,7 @@ def load_skills(file_path=".github/scripts/ai-skills.json"):
             return json.load(file)
     else:
         logger.warning(f"{file_path} not found. Proceeding with empty skills.")
-        return {"target_exceptions": [], "spring_di_rules": []}
+        return {"target_exceptions": [], "spring_di_rules": [], "file_extraction_rules": []}
 
 def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
     """Reads the coding standards from an external markdown file."""
@@ -72,17 +72,21 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
 
     spring_rules = "\n".join([f"- {rule}" for rule in skills.get("spring_di_rules", [])])
 
+    # Dynamically load the extraction rules from the JSON
+    fallback_extraction = [
+        "Standard Errors: Look for the highest user-created classes in the execution stack.",
+        "Ignore standard Java libraries (java.base) and framework internal classes."
+    ]
+    extraction_rules = "\n".join([f"{i+1}. {rule}" for i, rule in enumerate(skills.get("file_extraction_rules", fallback_extraction))])
+
     prompt = f"""
     Analyze the following Java stack trace to identify the main project source files that need to be modified.
     
     Rules for identification:
-    1. Standard Errors: Look for the highest user-created classes in the execution stack.
-    2. Spring Dependency Injection Errors: The user code will NOT be in the execution stack. Read the exception message carefully to identify missing annotations or bean conflicts.
+    {extraction_rules}
     
     Specific Spring Context:
     {spring_rules}
-    
-    3. Ignore standard Java libraries (java.base) and framework internal classes.
     
     Stack Trace:
     {stack_trace}
@@ -178,8 +182,7 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         return None
 
 if __name__ == "__main__":
-    if __name__ == "__main__":
-        workspace = Path(os.getcwd())
+    workspace = Path(os.getcwd())
     git_manager = GitManager(workspace)
 
     # Track unique files modified across all attempts
@@ -188,7 +191,8 @@ if __name__ == "__main__":
     skills = load_skills(".github/scripts/ai-skills.json")
     standards = get_coding_standards(".github/scripts/coding-standards.md")
 
-    MAX_RETRIES = 3
+    # Dynamically pull Max Retries from the JSON, default to 3 if missing
+    MAX_RETRIES = skills.get("max_retries", 3)
     attempt = 1
     success = False
 
@@ -203,8 +207,6 @@ if __name__ == "__main__":
             if attempt == 1:
                 logger.info("No target exceptions or test failures detected in initial reports.")
             else:
-                # If we are in a retry loop and find no exceptions, it means the tests passed!
-                # Note: This is a fallback in case the subprocess return code was strange.
                 logger.info("No more exceptions found. Fix appears successful!")
                 success = True
             break
@@ -223,7 +225,7 @@ if __name__ == "__main__":
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
             with open(file_path, "w") as file:
                 file.write(fixed_code)
-                print("fix is :", fixed_code)
+                print(f"fix applied to {file_path}:\n", fixed_code)
 
             # Track the modified file
             modified_files_map[file_path] = exc_type
@@ -244,7 +246,6 @@ if __name__ == "__main__":
             break
         else:
             logger.error(f"❌ Fix validation failed on attempt {attempt}.")
-            # Check if it was a compilation error (no surefire reports will be generated)
             if not os.path.exists(reports_dir):
                 logger.error("Compilation failed. The AI generated invalid Java syntax.")
                 logger.error("Check the Action logs for details. Aborting loop.")
@@ -256,7 +257,6 @@ if __name__ == "__main__":
     if success and modified_files_map:
         logger.info("Generating Pull Request with all accumulated fixes...")
 
-        # Convert our map back to the list format the PR function expects
         fixes_applied = [{"file": path, "exception": exc} for path, exc in modified_files_map.items()]
 
         pr_url = create_pr_and_commit(git_manager, fixes_applied)
