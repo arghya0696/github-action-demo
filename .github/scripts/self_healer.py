@@ -17,20 +17,27 @@ if not api_key:
     exit(1)
 
 client = anthropic.Anthropic(api_key=api_key)
-CLAUDE_MODEL = "claude-sonnet-4-6"
+CLAUDE_MODEL = "claude-3-5-sonnet-20241022"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 def load_skills(file_path=".github/scripts/ai-skills.json"):
-    """Loads the AI skills (exceptions and framework rules) from an external JSON file."""
+    """Loads the AI skills from an external JSON file."""
     if os.path.exists(file_path):
         logger.info(f"Loaded AI skills from {file_path}")
         with open(file_path, 'r') as file:
             return json.load(file)
     else:
-        logger.warning(f"{file_path} not found. Proceeding with empty skills.")
-        return {"target_exceptions": [], "spring_di_rules": [], "file_extraction_rules": []}
+        logger.warning(f"{file_path} not found. Proceeding with default skills.")
+        # Provide baseline defaults so the script doesn't crash if the JSON is missing
+        return {
+            "target_exceptions": [],
+            "file_extraction_rules": [
+                "Look for the highest user-created classes in the execution stack.",
+                "Ignore standard Java libraries (java.base) and framework internal classes."
+            ]
+        }
 
 def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
     """Reads the coding standards from an external markdown file."""
@@ -42,8 +49,21 @@ def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
         logger.warning(f"{file_path} not found. Proceeding with default AI knowledge.")
         return "Apply general modern Java best practices."
 
+def build_dynamic_context(skills: dict) -> str:
+    """Dynamically builds prompt context from all list-based rules in the skills JSON."""
+    context_blocks = []
+
+    for key, rules in skills.items():
+        # Automatically skip non-lists (like max_retries) and empty lists
+        if isinstance(rules, list) and rules:
+            category_title = key.replace('_', ' ').upper()
+            rules_str = "\n".join([f"- {rule}" for rule in rules])
+            context_blocks.append(f"### {category_title} ###\n{rules_str}")
+
+    return "\n\n".join(context_blocks)
+
 def find_exception_in_reports(target_exceptions):
-    """Scans Maven surefire reports for target exceptions loaded from the skills file."""
+    """Scans Maven surefire reports for target exceptions."""
     reports = glob.glob('target/surefire-reports/*.txt')
 
     fallback_content, fallback_exc_type = None, None
@@ -52,6 +72,7 @@ def find_exception_in_reports(target_exceptions):
         if not os.path.isfile(report): continue
         with open(report, 'r') as file:
             content = file.read()
+
             # Prioritized check
             for exc_type in target_exceptions:
                 if exc_type in content:
@@ -70,23 +91,13 @@ def find_exception_in_reports(target_exceptions):
 def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     """Uses Claude to intelligently identify ALL failing files from the stack trace."""
 
-    spring_rules = "\n".join([f"- {rule}" for rule in skills.get("spring_di_rules", [])])
-
-    # Dynamically load the extraction rules from the JSON
-    fallback_extraction = [
-        "Standard Errors: Look for the highest user-created classes in the execution stack.",
-        "Ignore standard Java libraries (java.base) and framework internal classes."
-    ]
-    extraction_rules = "\n".join([f"{i+1}. {rule}" for i, rule in enumerate(skills.get("file_extraction_rules", fallback_extraction))])
+    # One dynamic context covers everything!
+    dynamic_knowledge_base = build_dynamic_context(skills)
 
     prompt = f"""
     Analyze the following Java stack trace to identify the main project source files that need to be modified.
     
-    Rules for identification:
-    {extraction_rules}
-    
-    Specific Spring Context:
-    {spring_rules}
+    {dynamic_knowledge_base}
     
     Stack Trace:
     {stack_trace}
@@ -101,17 +112,15 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     )
 
     try:
-        # Clean the output and parse JSON
         raw_output = message.content[0].text.strip().replace("```json", "").replace("```", "")
         file_names = json.loads(raw_output)
 
-        # Now find where these files live in the local directory
         found_paths = []
         for file_name in file_names:
             for root, dirs, files in os.walk('.'):
                 if file_name in files:
                     found_paths.append(os.path.join(root, file_name))
-                    break # Stop searching once found
+                    break
 
         return found_paths
     except json.JSONDecodeError:
@@ -123,7 +132,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     with open(file_path, 'r') as file:
         java_code = file.read()
 
-    spring_rules = "\n".join([f"- {rule}" for rule in skills.get("spring_di_rules", [])])
+    dynamic_knowledge_base = build_dynamic_context(skills)
 
     system_instructions = f"""
     You are a Senior Java Staff Engineer resolving CI/CD pipeline failures. 
@@ -132,8 +141,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     ### TEAM CODING STANDARDS ###
     {coding_standards}
     
-    ### KNOWN FRAMEWORK PATTERNS ###
-    {spring_rules}
+    {dynamic_knowledge_base}
     """
 
     user_prompt = f"""
@@ -185,13 +193,12 @@ if __name__ == "__main__":
     workspace = Path(os.getcwd())
     git_manager = GitManager(workspace)
 
-    # Track unique files modified across all attempts
     modified_files_map = {}
 
     skills = load_skills(".github/scripts/ai-skills.json")
     standards = get_coding_standards(".github/scripts/coding-standards.md")
 
-    # Dynamically pull Max Retries from the JSON, default to 3 if missing
+    # Only max_retries is pulled directly; everything else is handled dynamically!
     MAX_RETRIES = skills.get("max_retries", 3)
     attempt = 1
     success = False
@@ -220,23 +227,19 @@ if __name__ == "__main__":
 
         logger.info(f"AI identified failing files: {failing_files}. Generating fixes...")
 
-        # 1. Apply Fixes
         for file_path in failing_files:
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
             with open(file_path, "w") as file:
                 file.write(fixed_code)
                 print(f"fix applied to {file_path}:\n", fixed_code)
 
-            # Track the modified file
             modified_files_map[file_path] = exc_type
 
-        # 2. Cleanup Old Reports before testing again
         reports_dir = "target/surefire-reports"
         if os.path.exists(reports_dir):
             shutil.rmtree(reports_dir)
             logger.info("Cleaned up old surefire reports.")
 
-        # 3. Validate
         logger.info("Running Maven test to validate fixes...")
         test_result = subprocess.run(["mvn", "test"], capture_output=True, text=True)
 
@@ -253,7 +256,6 @@ if __name__ == "__main__":
 
             attempt += 1
 
-    # Final PR Creation Step
     if success and modified_files_map:
         logger.info("Generating Pull Request with all accumulated fixes...")
 
