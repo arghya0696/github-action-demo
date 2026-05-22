@@ -17,7 +17,7 @@ if not api_key:
     exit(1)
 
 client = anthropic.Anthropic(api_key=api_key)
-CLAUDE_MODEL = "claude-3-5-sonnet-20241022"
+CLAUDE_MODEL = "claude-sonnet-4-6"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
