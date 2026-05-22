@@ -7,14 +7,14 @@ on:
     branches: '**'
   workflow_dispatch:  # Allow manual trigger for testing
 
-# Grants the GITHUB_TOKEN permission to push branches and create PRs
+# Added pull-requests: write so the AI can successfully open the PR
 permissions:
   contents: write
   pull-requests: write
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,11 +23,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Important: Fetch all history for git push to work
-
-      # - name: Setup GitHub CLI
-      #   run: |
-      #     echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token  
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -42,33 +38,45 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python Dependencies
-        run: pip install google-generativeai
+        run: pip install anthropic requests
 
       - name: Stage 1 - Print starting
         run: echo "Starting..."
 
       - name: Stage 2 - Run Maven Clean Install
-        run: mvn clean install
+        run: mvn clean install -DskipTests
 
-      - name: Stage 4 - AI Self-Healing Agent
-        # ONLY runs if the previous Maven Test step fails
+      - name: Stage 3 - Run Maven Test
+        run: mvn test
+
+      # Fixed the indentation here! 'if', 'env', and 'run' now align with 'name'
+      - name: Stage 5 - AI Self-Healing Agent (Test Failures)
         if: failure()
         env:
-          # This maps the secret to an environment variable in the Ubuntu runner
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TARGET_EXCEPTIONS: "java.lang.NullPointerException,java.lang.ClassCastException,java.lang.IndexOutOfBoundsException,java.lang.IllegalArgumentException"
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
-          pip install anthropic
           python .github/scripts/self_healer.py
 
-      - name: Stage 5 - Upload AI PR Metadata
+#       - name: Stage 5 - Upload AI PR Metadata
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: ai-pr-metadata
+#           path: ai_pr_metadata.json
+#           if-no-files-found: ignore
+          
+      - name: Stage 5 - AI Sonar Self-Healing Agent
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-pr-metadata
-          path: ai_pr_metadata.json
-          if-no-files-found: ignore
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Running Sonar self-healing..."
+          python .github/scripts/sonar_healer.py
 
       - name: Stage 6 - Print Result
         if: always()

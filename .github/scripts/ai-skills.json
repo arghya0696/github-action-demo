@@ -1,0 +1,20 @@
+{
+  "max_retries": 3,
+  "target_exceptions": [
+    "java.lang.NullPointerException",
+    "java.lang.ClassCastException",
+    "java.lang.IndexOutOfBoundsException",
+    "java.lang.IllegalArgumentException"
+  ],
+  "spring_di_rules": [
+    "UnsatisfiedDependencyException: Look for missing @Service, @Component, or @Repository annotations on the required bean.",
+    "NoSuchBeanDefinitionException: The required bean is not defined or component scanning is missing it.",
+    "NoUniqueBeanDefinitionException: Multiple beans of the same type exist. Fix by using @Qualifier or @Primary.",
+    "BeanCreationException: Often caused by missing configuration properties or failing constructor logic. Check for @Value annotations or missing environment variables."
+  ],
+  "file_extraction_rules": [
+    "Standard Errors: Look for the highest user-created classes in the execution stack.",
+    "Spring Dependency Injection Errors: The user code will NOT be in the execution stack. Read the exception message carefully to identify missing annotations or bean conflicts.",
+    "Ignore standard Java libraries (java.base) and framework internal classes."
+  ]
+}

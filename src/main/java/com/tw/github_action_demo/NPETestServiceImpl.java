@@ -1,9 +1,17 @@
 package com.tw.github_action_demo;
 
+import java.util.Optional;
+import java.util.logging.Logger;
+import org.springframework.stereotype.Service;
+
+
+@Service
 public class NPETestServiceImpl {
 
+    private static final Logger LOGGER = Logger.getLogger(NPETestServiceImpl.class.getName());
+
     public void testNPE() {
-        Integer p = null;
-        System.out.println(p.compareTo(10));
+        final Integer p = null;
+        Optional.ofNullable(p).ifPresent(value -> LOGGER.info(String.valueOf(value.compareTo(10))));
     }
 }

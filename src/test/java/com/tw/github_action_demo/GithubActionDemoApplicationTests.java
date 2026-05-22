@@ -7,13 +7,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 class GithubActionDemoApplicationTests {
 
-//	@Autowired
-//	TestService testService;
+	@Autowired
+	TestService testService;
 
 	@Test
 	void contextLoads() {
-		NPETestServiceImpl npeTestService = new NPETestServiceImpl();
-		npeTestService.testNPE();
+
+		testService.test();
 	}
 
 }
