@@ -82,20 +82,29 @@ def wait_for_analysis(report_task_path="target/sonar/report-task.txt", timeout=3
 
 
 def fetch_sonar_issues():
-    """Fetches open bugs, vulnerabilities, and code smells from SonarCloud for the current branch."""
+    """Fetches open bugs, vulnerabilities, and code smells from SonarCloud.
+
+    Tries the current branch first; falls back to the default branch if the
+    SonarCloud plan does not support branch-scoped issue queries (HTTP 403).
+    """
     current_branch = os.environ.get("GITHUB_REF_NAME", "master")
     url = f"{SONAR_HOST_URL}/api/issues/search"
-    params = {
+    base_params = {
         "componentKeys": SONAR_PROJECT_KEY,
-        "branch": current_branch,
         "resolved": "false",
         "types": "BUG,VULNERABILITY,CODE_SMELL",
         "ps": 100,
     }
-    response = requests.get(url, params=params, auth=(SONAR_TOKEN, ""))
+
+    # Attempt branch-scoped fetch first
+    response = requests.get(url, params={**base_params, "branch": current_branch}, auth=(SONAR_TOKEN, ""))
+    if response.status_code == 403:
+        print(f"Warning: branch-scoped issue query not supported (403). Falling back to default branch.")
+        response = requests.get(url, params=base_params, auth=(SONAR_TOKEN, ""))
+
     response.raise_for_status()
     issues = response.json().get("issues", [])
-    print(f"Found {len(issues)} open Sonar issues on branch '{current_branch}'.")
+    print(f"Found {len(issues)} open Sonar issues.")
     return issues
 
 
