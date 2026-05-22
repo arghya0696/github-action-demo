@@ -82,18 +82,20 @@ def wait_for_analysis(report_task_path="target/sonar/report-task.txt", timeout=3
 
 
 def fetch_sonar_issues():
-    """Fetches open bugs, vulnerabilities, and code smells from SonarCloud."""
+    """Fetches open bugs, vulnerabilities, and code smells from SonarCloud for the current branch."""
+    current_branch = os.environ.get("GITHUB_REF_NAME", "master")
     url = f"{SONAR_HOST_URL}/api/issues/search"
     params = {
         "componentKeys": SONAR_PROJECT_KEY,
+        "branch": current_branch,
         "resolved": "false",
         "types": "BUG,VULNERABILITY,CODE_SMELL",
-        "ps": 100,  # page size
+        "ps": 100,
     }
     response = requests.get(url, params=params, auth=(SONAR_TOKEN, ""))
     response.raise_for_status()
     issues = response.json().get("issues", [])
-    print(f"Found {len(issues)} open Sonar issues.")
+    print(f"Found {len(issues)} open Sonar issues on branch '{current_branch}'.")
     return issues
 
 
