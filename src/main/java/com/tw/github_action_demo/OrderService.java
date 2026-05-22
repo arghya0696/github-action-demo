@@ -7,6 +7,8 @@ public class OrderService {
 
     private static final Logger logger = Logger.getLogger(OrderService.class.getName());
 
+    private Integer test;
+
     public int getOrderCount(Map<String, List<String>> orders, String customer) {
         return orders.get(customer).size();
     }
