@@ -31,6 +31,7 @@
 		<sonar.organization>arghya0696</sonar.organization>
 		<sonar.projectKey>arghya0696_github-action-demo</sonar.projectKey>
 		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+		<sonar.coverage.exclusions>**/*</sonar.coverage.exclusions>
 	</properties>
 	<dependencies>
 		<dependency>
