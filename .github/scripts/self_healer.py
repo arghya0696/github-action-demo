@@ -7,6 +7,7 @@ from pathlib import Path
 from git_manager import GitManager
 from typing import List, Dict, Optional
 import logging
+import json
 
 # 1. Initialize the Anthropic client
 api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -159,7 +160,10 @@ def create_pr_and_commit(
 
         logger.info(f"Created PR: {pr_url}")
 
-        return pr_url
+        return {
+            "pr_url": pr_url,
+            "branch_name": branch_name
+        }
 
     except Exception as e:
         logger.error(
@@ -215,12 +219,17 @@ if __name__ == "__main__":
                     "exception": exc_type
                 })
 
-                pr_url = create_pr_and_commit(
+                result = create_pr_and_commit(
                     git_manager,
                     fixes_applied
                 )
+                if result:
 
-                if pr_url:
-                    print(f"PR Created: {pr_url}")
+                    print(f"PR Created: {result['pr_url']}")
+
+                    with open("ai_pr_metadata.json", "w") as f:
+                        json.dump(result, f, indent=2)
+
                 else:
                     print("Failed to create PR.")
+                    exit(1)

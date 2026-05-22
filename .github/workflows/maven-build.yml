@@ -11,11 +11,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   
 jobs:
   build:
@@ -51,11 +49,10 @@ jobs:
 
       - name: Stage 2 - Run Maven Clean Install
         run: mvn clean install
-        id: maven_test
 
       - name: Stage 4 - AI Self-Healing Agent
         # ONLY runs if the previous Maven Test step fails
-        if: failure() || steps.maven_test.outcome == 'failure'
+        if: failure()
         env:
           # This maps the secret to an environment variable in the Ubuntu runner
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -65,7 +62,15 @@ jobs:
           pip install anthropic
           python .github/scripts/self_healer.py
 
-      - name: Stage 5 - Print Result
+      - name: Stage 5 - Upload AI PR Metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-pr-metadata
+          path: ai_pr_metadata.json
+          if-no-files-found: ignore
+
+      - name: Stage 6 - Print Result
         if: always()
         run: |
           echo "Done with test. Result: ${{ job.status }}"
@@ -80,26 +85,17 @@ jobs:
     continue-on-error: true
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Download PR Metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-pr-metadata
 
-      - name: Install GitHub CLI
+      - name: Read PR Metadata
+        id: pr_metadata
         run: |
-          sudo apt update
-          sudo apt install gh -y
-
-      - name: Check for AI-Generated PRs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "=== Checking for AI-generated PRs ==="
-          
-          # List recent PRs with AI label
-          gh pr list \
-            --search "label:ai-generated" \
-            --state open \
-            --limit 5 \
-            --json number,title,createdAt
+          cat ai_pr_metadata.json
+          PR_URL=$(jq -r '.pr_url' ai_pr_metadata.json)
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
 
       - name: Run Quality Checks on AI Fixes
         run: |
