@@ -6,6 +6,7 @@ import json
 import anthropic
 from pathlib import Path
 from git_manager import GitManager
+from sonar_healer import run_sonar_healing
 from typing import List, Dict, Optional
 import logging
 import shutil
@@ -266,3 +267,5 @@ if __name__ == "__main__":
             print("Failed to create PR.")
     elif not success and modified_files_map:
         logger.error("All AI attempts failed. The local files were modified, but tests are still failing. No PR will be created.")
+
+    run_sonar_healing()

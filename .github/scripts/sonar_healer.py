@@ -9,17 +9,6 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 from git_manager import GitManager
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-SONAR_TOKEN = os.environ.get("SONAR_TOKEN")
-SONAR_HOST_URL = os.environ.get("SONAR_HOST_URL", "https://sonarcloud.io")
-SONAR_PROJECT_KEY = os.environ.get("SONAR_PROJECT_KEY")
-
-if not all([ANTHROPIC_API_KEY, SONAR_TOKEN, SONAR_PROJECT_KEY]):
-    print("Error: ANTHROPIC_API_KEY, SONAR_TOKEN, and SONAR_PROJECT_KEY must all be set.")
-    exit(1)
-
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
 
 def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
     if os.path.exists(file_path):
@@ -28,13 +17,11 @@ def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
     return "Apply general modern Java best practices."
 
 
-def run_sonar_scan():
+def run_sonar_scan(sonar_token):
     """Triggers a SonarCloud analysis via Maven and streams output to the console."""
     print("Starting SonarCloud analysis via Maven...")
-
     # sonar.organization, sonar.projectKey, and sonar.host.url are defined in pom.xml
-    cmd = ["mvn", "sonar:sonar", f"-Dsonar.token={SONAR_TOKEN}"]
-
+    cmd = ["mvn", "sonar:sonar", f"-Dsonar.token={sonar_token}"]
     result = subprocess.run(cmd)
     if result.returncode != 0:
         print("Warning: Maven Sonar scan exited with a non-zero status. Proceeding anyway.")
@@ -42,7 +29,7 @@ def run_sonar_scan():
         print("SonarCloud scan submitted successfully.")
 
 
-def wait_for_analysis(report_task_path="target/sonar/report-task.txt", timeout=300, poll_interval=10):
+def wait_for_analysis(sonar_token, sonar_host_url, report_task_path="target/sonar/report-task.txt", timeout=300, poll_interval=10):
     """Reads the ceTaskId from the Maven Sonar report and polls until analysis is complete."""
     if not os.path.exists(report_task_path):
         print(f"Warning: {report_task_path} not found. Skipping analysis wait.")
@@ -60,11 +47,11 @@ def wait_for_analysis(report_task_path="target/sonar/report-task.txt", timeout=3
         return
 
     print(f"Waiting for SonarCloud analysis task {task_id} to complete...")
-    url = f"{SONAR_HOST_URL}/api/ce/task"
+    url = f"{sonar_host_url}/api/ce/task"
     deadline = time.time() + timeout
 
     while time.time() < deadline:
-        response = requests.get(url, params={"id": task_id}, auth=(SONAR_TOKEN, ""))
+        response = requests.get(url, params={"id": task_id}, auth=(sonar_token, ""))
         response.raise_for_status()
         status = response.json().get("task", {}).get("status", "")
         print(f"  Analysis status: {status}")
@@ -81,29 +68,30 @@ def wait_for_analysis(report_task_path="target/sonar/report-task.txt", timeout=3
     print(f"Timed out after {timeout}s waiting for analysis. Proceeding anyway.")
 
 
-def fetch_sonar_issues():
-    """Fetches open bugs, vulnerabilities, and code smells from SonarCloud (default branch)."""
-    url = f"{SONAR_HOST_URL}/api/issues/search"
+def fetch_sonar_issues(sonar_token, sonar_host_url, sonar_project_key):
+    """Fetches open bugs, vulnerabilities, and code smells from SonarCloud."""
+    current_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    url = f"{sonar_host_url}/api/issues/search"
     params = {
-        "componentKeys": SONAR_PROJECT_KEY,
+        "componentKeys": sonar_project_key,
+        "branch": current_branch,
         "resolved": "false",
         "types": "BUG,VULNERABILITY,CODE_SMELL",
         "ps": 100,
     }
-    response = requests.get(url, params=params, auth=(SONAR_TOKEN, ""))
-    response.raise_for_status()
+    response = requests.get(url, params=params, auth=(sonar_token, ""))
+    if not response.ok:
+        print(f"Failed to fetch Sonar issues for branch '{current_branch}': {response.status_code} {response.text}")
+        exit(1)
     issues = response.json().get("issues", [])
-    print(f"Found {len(issues)} open Sonar issues.")
+    print(f"Found {len(issues)} open Sonar issues on branch '{current_branch}'.")
     return issues
 
 
 def group_issues_by_file(issues):
-    """Groups issues by their source file component path."""
     grouped = {}
     for issue in issues:
         component = issue.get("component", "")
-        # component looks like: org:repo:src/main/java/com/tw/Foo.java
-        # extract just the file path after the last colon
         file_path = component.split(":")[-1] if ":" in component else component
         if file_path not in grouped:
             grouped[file_path] = []
@@ -123,7 +111,7 @@ def format_issues_for_prompt(issues):
     return "\n".join(lines)
 
 
-def generate_fix(file_path, issues, coding_standards):
+def generate_fix(client, file_path, issues, coding_standards):
     """Asks Claude to fix all Sonar issues in a file."""
     if not os.path.exists(file_path):
         print(f"  Skipping {file_path} — file not found locally.")
@@ -161,8 +149,7 @@ Return ONLY the raw updated Java code. Do not include markdown formatting like `
         messages=[{"role": "user", "content": user_prompt}]
     )
 
-    fixed_code = message.content[0].text.replace("```java", "").replace("```", "").strip()
-    return fixed_code
+    return message.content[0].text.replace("```java", "").replace("```", "").strip()
 
 
 def commit_fixes(changed_files):
@@ -188,24 +175,36 @@ def commit_fixes(changed_files):
         print("No changes to commit.")
 
 
-if __name__ == "__main__":
-    print(f"Starting Sonar Self-Healing for project: {SONAR_PROJECT_KEY}")
+def run_sonar_healing():
+    """Entry point for Sonar healing — safe to call from other scripts."""
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    sonar_token = os.environ.get("SONAR_TOKEN")
+    sonar_host_url = os.environ.get("SONAR_HOST_URL", "https://sonarcloud.io")
+    sonar_project_key = os.environ.get("SONAR_PROJECT_KEY")
 
+    if not all([anthropic_key, sonar_token, sonar_project_key]):
+        print("Sonar healing skipped: ANTHROPIC_API_KEY, SONAR_TOKEN, and SONAR_PROJECT_KEY must all be set.")
+        return
+
+    client = anthropic.Anthropic(api_key=anthropic_key)
     coding_standards = get_coding_standards()
-    run_sonar_scan()
-    wait_for_analysis()
-    issues = fetch_sonar_issues()
+
+    print(f"Starting Sonar Self-Healing for project: {sonar_project_key}")
+
+    run_sonar_scan(sonar_token)
+    wait_for_analysis(sonar_token, sonar_host_url)
+    issues = fetch_sonar_issues(sonar_token, sonar_host_url, sonar_project_key)
 
     if not issues:
         print("No open Sonar issues found. Nothing to fix.")
-        exit(0)
+        return
 
     grouped = group_issues_by_file(issues)
     changed_files = []
 
     for file_path, file_issues in grouped.items():
         print(f"\nFixing {len(file_issues)} issue(s) in {file_path}...")
-        fixed_code = generate_fix(file_path, file_issues, coding_standards)
+        fixed_code = generate_fix(client, file_path, file_issues, coding_standards)
 
         if fixed_code:
             with open(file_path, 'w') as f:
@@ -218,3 +217,7 @@ if __name__ == "__main__":
         commit_fixes(changed_files)
     else:
         print("No local files were fixable.")
+
+
+if __name__ == "__main__":
+    run_sonar_healing()

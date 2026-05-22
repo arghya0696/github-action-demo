@@ -50,15 +50,7 @@ jobs:
         run: mvn test
 
       # Fixed the indentation here! 'if', 'env', and 'run' now align with 'name'
-      - name: Stage 5 - AI Self-Healing Agent (Test Failures)
-        if: failure()
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          echo "Tests failed. Invoking AI self-healing script..."
-          python .github/scripts/self_healer.py
-
-      - name: Stage 5 - AI Sonar Self-Healing Agent
+      - name: Stage 5 - AI Self-Healing Agent
         if: always()
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -67,8 +59,8 @@ jobs:
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Running Sonar self-healing..."
-          python .github/scripts/sonar_healer.py
+          echo "Invoking AI self-healing (test failures + Sonar issues)..."
+          python .github/scripts/self_healer.py
 
       - name: Stage 6 - Print Result
         if: always()
