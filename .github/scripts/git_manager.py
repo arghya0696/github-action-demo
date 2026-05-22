@@ -348,7 +348,7 @@ This pull request was automatically generated to fix test failures detected duri
             logger.error(f"Git command timed out: {' '.join(args)}")
             raise
         except Exception as e:
-            logger.error(f"Git command failed: {' '.join(args)}")
+            logger.debug(f"Git command failed: {' '.join(args)}")
             raise
     
     def _get_current_branch(self) -> str:
