@@ -13,13 +13,13 @@ public class OrderService {
         return orders.get(customer).size();
     }
 
-    public int parseOrderId(String raw) {
+    public Integer parseOrderId(String raw) {
         try {
             return Integer.parseInt(raw);
         } catch (NumberFormatException e) {
             // Return -1 to indicate invalid input when raw cannot be parsed as an integer
         }
-        return -1;
+        return null;
     }
 
     public boolean isSameCustomer(String a, String b) {
