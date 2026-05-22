@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 import time
 import requests
 import anthropic
@@ -25,6 +26,20 @@ def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
         with open(file_path, 'r') as f:
             return f.read()
     return "Apply general modern Java best practices."
+
+
+def run_sonar_scan():
+    """Triggers a SonarCloud analysis via Maven and streams output to the console."""
+    print("Starting SonarCloud analysis via Maven...")
+
+    # sonar.organization, sonar.projectKey, and sonar.host.url are defined in pom.xml
+    cmd = ["mvn", "sonar:sonar", f"-Dsonar.token={SONAR_TOKEN}"]
+
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print("Warning: Maven Sonar scan exited with a non-zero status. Proceeding anyway.")
+    else:
+        print("SonarCloud scan submitted successfully.")
 
 
 def wait_for_analysis(report_task_path="target/sonar/report-task.txt", timeout=300, poll_interval=10):
@@ -177,6 +192,7 @@ if __name__ == "__main__":
     print(f"Starting Sonar Self-Healing for project: {SONAR_PROJECT_KEY}")
 
     coding_standards = get_coding_standards()
+    run_sonar_scan()
     wait_for_analysis()
     issues = fetch_sonar_issues()
 
