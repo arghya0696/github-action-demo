@@ -30,7 +30,6 @@ def load_skills(file_path=".github/scripts/ai-skills.json"):
             return json.load(file)
     else:
         logger.warning(f"{file_path} not found. Proceeding with default skills.")
-        # Provide baseline defaults so the script doesn't crash if the JSON is missing
         return {
             "target_exceptions": [],
             "file_extraction_rules": [
@@ -54,7 +53,6 @@ def build_dynamic_context(skills: dict) -> str:
     context_blocks = []
 
     for key, rules in skills.items():
-        # Automatically skip non-lists (like max_retries) and empty lists
         if isinstance(rules, list) and rules:
             category_title = key.replace('_', ' ').upper()
             rules_str = "\n".join([f"- {rule}" for rule in rules])
@@ -73,13 +71,11 @@ def find_exception_in_reports(target_exceptions):
         with open(report, 'r') as file:
             content = file.read()
 
-            # Prioritized check
             for exc_type in target_exceptions:
                 if exc_type in content:
                     logger.info(f"Found targeted {exc_type} in report: {report}")
                     return content, exc_type
 
-            # Fallback if no target exception is found but a failure occurred
             if not fallback_exc_type:
                 match = re.search(r'([a-zA-Z0-9_.]+(?:Exception|Error|Failure))', content)
                 if match:
@@ -89,17 +85,15 @@ def find_exception_in_reports(target_exceptions):
     return fallback_content, fallback_exc_type
 
 def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
-    """Uses Claude to intelligently identify ALL failing files from the stack trace."""
-
-    # One dynamic context covers everything!
+    """Uses Claude to intelligently identify ALL failing files from the stack trace or compiler log."""
     dynamic_knowledge_base = build_dynamic_context(skills)
 
     prompt = f"""
-    Analyze the following Java stack trace to identify the main project source files that need to be modified.
+    Analyze the following Java stack trace or compilation error log to identify the main project source files that need to be modified.
     
     {dynamic_knowledge_base}
     
-    Stack Trace:
+    Stack Trace / Error Log:
     {stack_trace}
     
     Return ONLY a raw JSON list of exact file names with their extensions (e.g., ["NPETestServiceImpl.java", "MyConfig.java"]). Do not output markdown blocks or any other text.
@@ -147,13 +141,13 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     user_prompt = f"""
     The following code throws a {exc_type}.
     
-    Stack Trace:
+    Error Log / Stack Trace:
     {stack_trace}
     
     Java Code (File: {file_path}):
     {java_code}
     
-    Fix the {exc_type} in the code addressing the root cause indicated by the stack trace.
+    Fix the {exc_type} in the code addressing the root cause indicated by the stack trace or compiler error.
     Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
     """
 
@@ -202,31 +196,40 @@ if __name__ == "__main__":
     skills = load_skills(".github/scripts/ai-skills.json")
     standards = get_coding_standards(".github/scripts/coding-standards.md")
 
-    # Only max_retries is pulled directly; everything else is handled dynamically!
     MAX_RETRIES = skills.get("max_retries", 3)
     attempt = 1
     success = False
+
+    # Store compilation errors if the AI breaks syntax in a previous attempt
+    compilation_error_output = None
 
     logger.info(f"Starting Self-Healing Loop (Max Attempts: {MAX_RETRIES})")
 
     while attempt <= MAX_RETRIES:
         logger.info(f"--- Attempt {attempt} of {MAX_RETRIES} ---")
 
-        stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []))
+        # If we have a compilation error from a previous loop, use that instead of searching reports
+        if compilation_error_output:
+            logger.info("Using compilation error output from previous attempt...")
+            stack_trace = compilation_error_output
+            exc_type = "Java Compilation Error"
+            compilation_error_output = None  # Reset for next loop
+        else:
+            stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []))
 
-        if not stack_trace or not exc_type:
-            if attempt == 1:
-                logger.info("No target exceptions or test failures detected in initial reports.")
-            else:
-                logger.info("No more exceptions found. Fix appears successful!")
-                success = True
-            break
+            if not stack_trace or not exc_type:
+                if attempt == 1:
+                    logger.info("No target exceptions or test failures detected in initial reports.")
+                else:
+                    logger.info("No more exceptions found. Fix appears successful!")
+                    success = True
+                break
 
         logger.info(f"Analyzing cause: {exc_type}")
         failing_files = get_failing_files_from_ai(stack_trace, skills)
 
         if not failing_files:
-            logger.warning("Could not map stack trace to local files. Breaking loop.")
+            logger.warning("Could not map stack trace/error to local files. Breaking loop.")
             break
 
         logger.info(f"AI identified failing files: {failing_files}. Generating fixes...")
@@ -253,10 +256,12 @@ if __name__ == "__main__":
             break
         else:
             logger.error(f"❌ Fix validation failed on attempt {attempt}.")
-            if not os.path.exists(reports_dir):
-                logger.error("Compilation failed. The AI generated invalid Java syntax.")
-                logger.error("Check the Action logs for details. Aborting loop.")
-                break
+
+            # Check if it was a compilation failure (surefire-reports directory was never generated)
+            if not os.path.exists(reports_dir) or not glob.glob(f"{reports_dir}/*.txt"):
+                logger.error("Compilation failed. Extracting Maven error log for AI correction.")
+                # Pass the last 4000 characters of the terminal output so Claude can read the compiler error
+                compilation_error_output = test_result.stdout[-4000:]
 
             attempt += 1
 
