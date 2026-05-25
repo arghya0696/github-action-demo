@@ -3,3 +3,4 @@
 3. **Fail-Fast**: Never catch NullPointerException. Fix the root cause instead.
 4. **Modern Java**: Use Java 21 features where appropriate (Pattern matching, records, etc.).
 5. **Immutability**: Prefer `final` keywords for variables that should not be reassigned.
+6. **Testing**: Don't delete any test cases , try see what needs a fix , code or test 
