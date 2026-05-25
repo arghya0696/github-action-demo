@@ -28,37 +28,40 @@ class GitManager:
     def __init__(self, workspace: Path):
         """Initialize Git manager."""
         self.workspace = Path(workspace)
-        self._setup_git_config()
+
         self.github_token = os.environ.get("GITHUB_TOKEN")
         self.github_repo = os.environ.get("GITHUB_REPOSITORY", "unknown/repo")
-        
+        self._setup_git_config()
         logger.info(f"Git manager initialized for {self.workspace}")
         logger.info(f"Repository: {self.github_repo}")
     
     def _setup_git_config(self):
-        """Configure Git for automated commits."""
         try:
-            # Set committer identity for automated commits
             self._run_git_command(
-                ["config", "--local", "user.name", "github-actions[bot]"],
-                "Setting git user name"
+                ["config", "--local", "user.name", "github-actions[bot]"]
             )
-            
+
             self._run_git_command(
-                ["config", "--local", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
-                "Setting git user email"
+                ["config", "--local", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]
             )
-            
-            # Configure for pushing
-            self._run_git_command(
-                ["config", "--local", "push.default", "current"],
-                "Configuring git push default"
-            )
-            
-            logger.info("Git configured for automated commits")
-        
+
+            if self.github_token and self.github_repo != "unknown/repo":
+                authenticated_remote = (
+                    f"https://x-access-token:{self.github_token}"
+                    f"@github.com/{self.github_repo}.git"
+                )
+
+                self._run_git_command([
+                    "remote",
+                    "set-url",
+                    "origin",
+                    authenticated_remote
+                ])
+
+            logger.info("Git configured successfully")
+
         except Exception as e:
-            logger.warning(f"Could not configure git: {str(e)}")
+            logger.warning(f"Git config failed: {e}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
         """
@@ -369,6 +372,10 @@ This pull request was automatically generated to fix test failures detected duri
                     result.stderr
                 )
             
+            if result.returncode != 0:
+                logger.error(f"FAILED: {' '.join(cmd)}")
+                logger.error(f"stdout:\n{result.stdout}")
+                logger.error(f"stderr:\n{result.stderr}")
             return result.stdout.strip()
         
         except subprocess.TimeoutExpired:
