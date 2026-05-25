@@ -181,24 +181,18 @@ class GitManager:
         try:
             self._run_git_command([
                 "push",
+                "--force-with-lease",
                 "--set-upstream",
                 "origin",
                 branch_name
             ])
 
-            logger.info(f"Pushed {branch_name}")
+            logger.info(f"Pushed branch {branch_name}")
             return True
 
-        except subprocess.CalledProcessError:
-            logger.info("Branch exists remotely. Pushing latest changes.")
-
-            self._run_git_command([
-                "push",
-                "origin",
-                branch_name
-            ])
-
-            return True
+        except Exception as e:
+            logger.error(f"Push failed: {e}")
+            raise
     
     def create_pr(
         self, 
@@ -373,9 +367,17 @@ This pull request was automatically generated to fix test failures detected duri
                 )
             
             if result.returncode != 0:
-                logger.error(f"FAILED: {' '.join(cmd)}")
-                logger.error(f"stdout:\n{result.stdout}")
-                logger.error(f"stderr:\n{result.stderr}")
+                logger.error(f"Git command failed: {' '.join(cmd)}")
+                logger.error(f"stdout: {result.stdout}")
+                logger.error(f"stderr: {result.stderr}")
+
+                raise subprocess.CalledProcessError(
+                    result.returncode,
+                    cmd,
+                    result.stdout,
+                    result.stderr
+                )
+
             return result.stdout.strip()
         
         except subprocess.TimeoutExpired:
