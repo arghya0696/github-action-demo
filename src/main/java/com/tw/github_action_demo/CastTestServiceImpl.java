@@ -8,8 +8,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class CastTestServiceImpl {
 
+    private static final Logger logger = LoggerFactory.getLogger(CastTestServiceImpl.class);
+
     public void testClassCast() {
-        Object x = Integer.valueOf(0);
-        System.out.println(String.valueOf(x));
+        final Object x = Integer.valueOf(0);
+        logger.info("{}", x);
     }
 }
