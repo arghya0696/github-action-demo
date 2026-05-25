@@ -12,6 +12,6 @@ public class CastTestServiceImpl {
 
     public void testClassCast() {
         final Object x = Integer.valueOf(0);
-        logger.info(String.valueOf(x));
+        logger.info("{}", x);
     }
 }
