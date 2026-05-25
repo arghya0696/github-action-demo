@@ -61,6 +61,12 @@ class GitManager:
             logger.warning(f"Could not configure git: {str(e)}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
+        """
+        Creates or reuses AI fix branch.
+
+        Returns:
+            (branch_name, created_now)
+        """
 
         source_branch = (
             os.environ.get("GITHUB_HEAD_REF")
@@ -83,33 +89,14 @@ class GitManager:
         )
 
         if remote_exists.returncode == 0:
+            logger.info(f"Branch already exists remotely: {branch_name}")
 
-            logger.info(f"Remote branch exists: {branch_name}")
-
-            checkout = subprocess.run(
-                ["git", "checkout", branch_name],
-                cwd=self.workspace,
-                capture_output=True,
-                text=True
-            )
-
-            if checkout.returncode != 0:
-
-                logger.info(
-                    f"Local branch missing. Checking out directly from origin/{branch_name}"
-                )
-
-                self._run_git_command([
-                    "checkout",
-                    "-B",
-                    branch_name
-                ])
-
-                self._run_git_command([
-                    "pull",
-                    "origin",
-                    branch_name
-                ])
+            self._run_git_command([
+                "checkout",
+                "-B",
+                branch_name,
+                f"origin/{branch_name}"
+            ])
 
             return branch_name, False
 
@@ -122,6 +109,7 @@ class GitManager:
         ])
 
         return branch_name, True
+
 
 
     def commit_changes(
