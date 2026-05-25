@@ -18,5 +18,6 @@ public class CastTestServiceImpl {
         String str = (String) obj;
 
         LOGGER.info(str);
+
     }
 }
