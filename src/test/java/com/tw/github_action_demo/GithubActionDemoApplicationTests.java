@@ -10,10 +10,19 @@ class GithubActionDemoApplicationTests {
 	@Autowired
 	TestService testService;
 
+	@Autowired
+	CastTestServiceImpl castTestServiceImpl;
+
 	@Test
-	void contextLoads() {
+	void testNPE() {
 
 		testService.test();
+	}
+
+	@Test
+	void testClassCast() {
+
+		castTestServiceImpl.testClassCast();
 	}
 
 }
