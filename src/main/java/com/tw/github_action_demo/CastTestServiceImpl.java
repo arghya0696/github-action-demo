@@ -11,7 +11,7 @@ public class CastTestServiceImpl {
     private static final Logger logger = LoggerFactory.getLogger(CastTestServiceImpl.class);
 
     public void testClassCast() {
-        Object x = Integer.valueOf(0);
-        System.out.println(x.toString());
+        final Object x = Integer.valueOf(0);
+        logger.debug("Value: {}", x);
     }
 }
