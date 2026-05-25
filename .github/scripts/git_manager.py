@@ -383,6 +383,19 @@ This pull request was automatically generated to fix test failures detected duri
         
         return "main"  # Default fallback
     
+    def has_uncommitted_changes(self, files: List[str]) -> bool:
+        """Returns True if any of the given files have uncommitted changes."""
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"] + files,
+                cwd=self.workspace,
+                capture_output=True,
+                text=True
+            )
+            return bool(result.stdout.strip())
+        except Exception:
+            return False
+
     def _branch_exists(self, branch_name: str) -> bool:
         """Check if branch exists locally or remotely."""
         try:

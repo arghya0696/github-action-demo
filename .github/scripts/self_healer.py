@@ -172,10 +172,14 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         if not fixes_applied:
             return None
 
+        fixed_files = [fix["file"] for fix in fixes_applied if "file" in fix]
+
+        if not git_manager.has_uncommitted_changes(fixed_files):
+            logger.info("No new changes to commit. Skipping branch creation and PR.")
+            return None
+
         branch_name = git_manager.create_branch()
         logger.info(f"Created branch: {branch_name}")
-
-        fixed_files = [fix["file"] for fix in fixes_applied if "file" in fix]
 
         if not git_manager.commit_changes(files=fixed_files):
             logger.warning("Commit failed.")
