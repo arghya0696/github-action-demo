@@ -61,10 +61,6 @@ class GitManager:
             logger.warning(f"Could not configure git: {str(e)}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
-        """
-        Creates or reuses the AI fix branch safely.
-        """
-
         source_branch = (
             os.environ.get("GITHUB_HEAD_REF")
             or os.environ.get("GITHUB_REF_NAME")
@@ -77,10 +73,9 @@ class GitManager:
         logger.info(f"Source branch: {source_branch}")
         logger.info(f"AI branch: {branch_name}")
 
-        # always fetch latest refs
-        self._run_git_command(["fetch", "origin"])
+        # fetch all refs first
+        self._run_git_command(["fetch", "--all"])
 
-        # check remote branch
         remote_exists = subprocess.run(
             ["git", "ls-remote", "--heads", "origin", branch_name],
             cwd=self.workspace,
@@ -89,19 +84,26 @@ class GitManager:
         )
 
         if remote_exists.stdout.strip():
-            logger.info(f"Remote branch exists. Checking out {branch_name}")
+            logger.info(f"Remote branch exists: {branch_name}")
 
-            # create/reset local branch from remote
+            # fetch branch locally
+            self._run_git_command([
+                "fetch",
+                "origin",
+                branch_name
+            ])
+
+            # checkout local branch from FETCH_HEAD
             self._run_git_command([
                 "checkout",
                 "-B",
                 branch_name,
-                f"origin/{branch_name}"
+                "FETCH_HEAD"
             ])
 
             return branch_name, False
 
-        logger.info(f"Creating new branch {branch_name}")
+        logger.info(f"Creating new branch: {branch_name}")
 
         self._run_git_command([
             "checkout",
@@ -110,6 +112,7 @@ class GitManager:
         ])
 
         return branch_name, True
+
 
 
 
@@ -368,6 +371,10 @@ This pull request was automatically generated to fix test failures detected duri
         except Exception as e:
             logger.error(f"Git command failed: {' '.join(args)}")
             raise
+        if result.returncode != 0:
+            logger.error(f"Command failed: {' '.join(cmd)}")
+            logger.error(f"stdout:\n{result.stdout}")
+            logger.error(f"stderr:\n{result.stderr}")
     
     def _get_current_branch(self) -> str:
         """Get current branch name."""
