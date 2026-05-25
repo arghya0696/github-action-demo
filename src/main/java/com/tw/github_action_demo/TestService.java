@@ -1,13 +1,15 @@
 package com.tw.github_action_demo;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TestService {
 
-    @Autowired
-    private NPETestServiceImpl npeTestService;
+    private final NPETestServiceImpl npeTestService;
+
+    public TestService(final NPETestServiceImpl npeTestService) {
+        this.npeTestService = java.util.Objects.requireNonNull(npeTestService);
+    }
 
     void test() {
         npeTestService.testNPE();
