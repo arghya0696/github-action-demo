@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 public class CastTestServiceImpl {
 
     public void testClassCast() {
-        Object x = new Integer(0);
-        System.out.println((String)x);
+        final Object x = Integer.valueOf(0);
+        System.out.println(String.valueOf(x));
     }
 }
