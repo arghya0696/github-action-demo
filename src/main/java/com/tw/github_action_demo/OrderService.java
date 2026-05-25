@@ -35,7 +35,7 @@ public class OrderService {
 
     // S106 CODE_SMELL: use logger instead of System.out.println
     public void printOrder(String orderId) {
-        LOGGER.info("Processing order: " + orderId);
+        LOGGER.info(() -> "Processing order: " + orderId);
     }
 
     // S1643 CODE_SMELL: string concatenation inside a loop, use StringBuilder
