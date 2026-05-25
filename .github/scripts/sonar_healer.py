@@ -43,6 +43,9 @@ def run_sonar_scan():
 
     if result.returncode != 0:
         print("Warning: Maven Sonar scan exited with non-zero status. Proceeding anyway.")
+        logger.error(f"Command failed: {' '.join(cmd)}")
+        logger.error(f"stdout: {result.stdout}")
+        logger.error(f"stderr: {result.stderr}")
     else:
         print("SonarCloud scan submitted successfully.")
 
