@@ -29,15 +29,20 @@ def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
 
 
 def run_sonar_scan():
-    """Triggers a SonarCloud analysis via Maven and streams output to the console."""
     print("Starting SonarCloud analysis via Maven...")
 
-    # sonar.organization, sonar.projectKey, and sonar.host.url are defined in pom.xml
-    cmd = ["mvn", "sonar:sonar", f"-Dsonar.token={SONAR_TOKEN}"]
+    cmd = [
+        "mvn",
+        "clean",
+        "verify",
+        "sonar:sonar",
+        f"-Dsonar.token={SONAR_TOKEN}"
+    ]
 
     result = subprocess.run(cmd)
+
     if result.returncode != 0:
-        print("Warning: Maven Sonar scan exited with a non-zero status. Proceeding anyway.")
+        print("Warning: Maven Sonar scan exited with non-zero status. Proceeding anyway.")
     else:
         print("SonarCloud scan submitted successfully.")
 

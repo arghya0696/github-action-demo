@@ -61,12 +61,6 @@ class GitManager:
             logger.warning(f"Could not configure git: {str(e)}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
-        """
-        Creates or reuses ai-fix branch.
-
-        Returns:
-            (branch_name, created_now)
-        """
 
         source_branch = (
             os.environ.get("GITHUB_HEAD_REF")
@@ -74,40 +68,47 @@ class GitManager:
             or self._get_current_branch()
         )
 
-        safe_branch = source_branch.replace("/", "-")
-        branch_name = f"{prefix}-{safe_branch}"
+        branch_name = f"{prefix}-{source_branch.replace('/', '-')}"
 
         logger.info(f"Source branch: {source_branch}")
         logger.info(f"AI fix branch: {branch_name}")
 
         self._run_git_command(["fetch", "origin"])
 
-        exists = subprocess.run(
-            ["git", "ls-remote", "--heads", "origin", branch_name],
+        remote_exists = subprocess.run(
+            ["git", "ls-remote", "--exit-code", "--heads", "origin", branch_name],
             cwd=self.workspace,
             capture_output=True,
             text=True
         )
 
-        if exists.stdout.strip():
-            logger.info(f"Remote branch already exists: {branch_name}")
+        if remote_exists.returncode == 0:
 
-            result = subprocess.run(
+            logger.info(f"Remote branch exists: {branch_name}")
+
+            checkout = subprocess.run(
                 ["git", "checkout", branch_name],
                 cwd=self.workspace,
                 capture_output=True,
                 text=True
             )
 
-            if result.returncode != 0:
-                logger.info("Local branch missing. Creating tracking branch.")
+            if checkout.returncode != 0:
+
+                logger.info(
+                    f"Local branch missing. Checking out directly from origin/{branch_name}"
+                )
 
                 self._run_git_command([
                     "checkout",
-                    "-b",
-                    branch_name,
-                    "--track",
-                    f"origin/{branch_name}"
+                    "-B",
+                    branch_name
+                ])
+
+                self._run_git_command([
+                    "pull",
+                    "origin",
+                    branch_name
                 ])
 
             return branch_name, False
@@ -121,6 +122,7 @@ class GitManager:
         ])
 
         return branch_name, True
+
 
     def commit_changes(
         self, 
