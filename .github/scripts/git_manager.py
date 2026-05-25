@@ -61,6 +61,10 @@ class GitManager:
             logger.warning(f"Could not configure git: {str(e)}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
+        """
+        Create or reuse AI fix branch safely in GitHub Actions.
+        """
+
         source_branch = (
             os.environ.get("GITHUB_HEAD_REF")
             or os.environ.get("GITHUB_REF_NAME")
@@ -73,33 +77,34 @@ class GitManager:
         logger.info(f"Source branch: {source_branch}")
         logger.info(f"AI branch: {branch_name}")
 
-        # fetch all refs first
-        self._run_git_command(["fetch", "--all"])
+        # always start from current checked-out commit
+        self._run_git_command(["fetch", "origin"])
 
         remote_exists = subprocess.run(
-            ["git", "ls-remote", "--heads", "origin", branch_name],
+            ["git", "ls-remote", "--exit-code", "--heads", "origin", branch_name],
             cwd=self.workspace,
             capture_output=True,
             text=True
         )
 
-        if remote_exists.stdout.strip():
+        if remote_exists.returncode == 0:
             logger.info(f"Remote branch exists: {branch_name}")
 
-            # fetch branch locally
-            self._run_git_command([
-                "fetch",
-                "origin",
-                branch_name
-            ])
+            # switch to branch if local exists
+            local_exists = subprocess.run(
+                ["git", "show-ref", "--verify", f"refs/heads/{branch_name}"],
+                cwd=self.workspace,
+                capture_output=True
+            )
 
-            # checkout local branch from FETCH_HEAD
-            self._run_git_command([
-                "checkout",
-                "-B",
-                branch_name,
-                "FETCH_HEAD"
-            ])
+            if local_exists.returncode == 0:
+                self._run_git_command(["checkout", branch_name])
+            else:
+                self._run_git_command([
+                    "checkout",
+                    "-b",
+                    branch_name
+                ])
 
             return branch_name, False
 
@@ -112,7 +117,6 @@ class GitManager:
         ])
 
         return branch_name, True
-
 
 
 
@@ -171,25 +175,27 @@ class GitManager:
             return False
     
     def push_branch(self, branch_name: str) -> bool:
-        """
-        Push feature branch to remote.
-        
-        Args:
-            branch_name: Name of branch to push
-        """
         try:
-            # Push to origin
-            self._run_git_command(
-                ["push", "origin", branch_name, "--set-upstream"],
-                f"Pushing {branch_name} to origin"
-            )
-            
-            logger.info(f"✓ Pushed branch: {branch_name}")
+            self._run_git_command([
+                "push",
+                "--set-upstream",
+                "origin",
+                branch_name
+            ])
+
+            logger.info(f"Pushed {branch_name}")
             return True
-        
-        except Exception as e:
-            logger.error(f"Failed to push branch: {str(e)}")
-            raise
+
+        except subprocess.CalledProcessError:
+            logger.info("Branch exists remotely. Pushing latest changes.")
+
+            self._run_git_command([
+                "push",
+                "origin",
+                branch_name
+            ])
+
+            return True
     
     def create_pr(
         self, 
