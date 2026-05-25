@@ -68,8 +68,6 @@ jobs:
   sonar-analysis:
     needs: build-and-test
     runs-on: ubuntu-latest
-    
-    # This line tells GitHub to pause and wait for manual human approval
     environment: manual-sonar-approval 
     
     steps:
@@ -81,6 +79,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      # ADD THIS STEP TO FIX THE ERROR
+      - name: Install Python Dependencies
+        run: pip install anthropic requests
+
       - name: Stage 5 - AI Sonar Self-Healing Agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -91,3 +93,4 @@ jobs:
         run: |
           echo "Running Sonar self-healing..."
           python .github/scripts/sonar_healer.py
+
