@@ -132,6 +132,10 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     You are a Senior Java Staff Engineer resolving CI/CD pipeline failures. 
     You must strictly adhere to the following Team Coding Standards.
     
+    CRITICAL CONSTRAINTS:
+    1. NEVER delete, skip, or comment out test cases (e.g., `@Test` methods) to resolve a failure. 
+    2. If a test is failing, you must either fix the underlying source code logic, or legitimately update the test assertions/mocks to match the correct expected behavior.
+    
     ### TEAM CODING STANDARDS ###
     {coding_standards}
     
