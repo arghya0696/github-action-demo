@@ -65,34 +65,35 @@ def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
     Returns:
         (branch_name, created_now)
     """
-    source_branch = os.environ.get("GITHUB_HEAD_REF") or self._get_current_branch()
+    try:
+        source_branch = os.environ.get("GITHUB_HEAD_REF") or self._get_current_branch()
 
-    safe_branch = source_branch.replace("/", "-")
-    branch_name = f"{prefix}-{safe_branch}"
+        safe_branch = source_branch.replace("/", "-")
+        branch_name = f"{prefix}-{safe_branch}"
 
-    self._run_git_command(["fetch", "origin"])
+        self._run_git_command(["fetch", "origin"])
 
-    exists = subprocess.run(
-        ["git", "ls-remote", "--heads", "origin", branch_name],
-        cwd=self.workspace,
-        capture_output=True,
-        text=True
-    )
+        exists = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin", branch_name],
+            cwd=self.workspace,
+            capture_output=True,
+            text=True
+        )
 
-    if exists.stdout.strip():
-        logger.info(f"Existing AI fix branch found: {branch_name}")
+        if exists.stdout.strip():
+            logger.info(f"Existing AI fix branch found: {branch_name}")
 
-        self._run_git_command(["checkout", branch_name])
-        self._run_git_command(["pull", "origin", branch_name])
+            self._run_git_command(["checkout", branch_name])
+            self._run_git_command(["pull", "origin", branch_name])
 
-        return branch_name, False
+            return branch_name, False
 
-    else:
-        logger.info(f"Creating new AI fix branch: {branch_name}")
+        else:
+            logger.info(f"Creating new AI fix branch: {branch_name}")
 
-        self._run_git_command(["checkout", "-b", branch_name])
+            self._run_git_command(["checkout", "-b", branch_name])
 
-        return branch_name, True
+            return branch_name, True
 
     except Exception as e:
         logger.error(f"Failed to create/reuse branch: {str(e)}")
@@ -173,41 +174,53 @@ def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
             logger.error(f"Failed to push branch: {str(e)}")
             raise
     
-    def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> Optional[str]:
-
-        if not fixes_applied:
-            return None
-
-        fixed_files = [fix["file"] for fix in fixes_applied]
-
-        if not git_manager.has_uncommitted_changes(fixed_files):
-            logger.info("No changes detected")
-            return None
-
-        branch_name, created_now = git_manager.create_branch()
-
-        if not git_manager.commit_changes(files=fixed_files):
-            return None
-
-        git_manager.push_branch(branch_name)
-
-        if created_now:
-            source_branch = (
-                os.environ.get("GITHUB_HEAD_REF")
-                or git_manager._get_current_branch()
-            )
-
-            pr_url = git_manager.create_pr(
-                branch_name=branch_name,
-                files_changed=fixed_files,
-                base_branch=source_branch
-            )
-
-            return pr_url
-
-        logger.info("Branch already exists — PR already exists or will update automatically.")
-        return None
+    def create_pr(
+        self, 
+        branch_name: str, 
+        files_changed: List[str],
+        base_branch: str = None
+    ) -> Optional[str]:
+        """
+        Create a pull request using GitHub CLI.
         
+        Args:
+            branch_name: Feature branch name
+            files_changed: List of files changed
+            base_branch: Target branch (default: master/main)
+        
+        Returns:
+            PR URL if successful, None otherwise
+        """
+        try:
+            # Determine base branch
+            if not base_branch:
+                base_branch = self._get_base_branch()
+            
+            # Generate PR title and body
+            pr_title, pr_body = self._generate_pr_content(files_changed, branch_name)
+            
+            logger.info(f"Creating PR: {pr_title}")
+            logger.debug(f"PR Body:\n{pr_body}")
+            
+            # Create PR using GitHub CLI
+            pr_url = self._create_pr_with_gh_cli(
+                title=pr_title,
+                body=pr_body,
+                head=branch_name,
+                base=base_branch
+            )
+            
+            if pr_url:
+                logger.info(f"✓ PR created: {pr_url}")
+                return pr_url
+            else:
+                logger.warning("Could not create PR")
+                return None
+        
+        except Exception as e:
+            logger.error(f"Failed to create PR: {str(e)}")
+            return None
+    
     def _create_pr_with_gh_cli(
         self, 
         title: str, 
