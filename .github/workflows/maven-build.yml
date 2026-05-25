@@ -5,7 +5,7 @@ on:
     branches: '**'
   pull_request:
     branches: '**'
-  workflow_dispatch:  # Allow manual trigger for testing
+  workflow_dispatch: 
 
 # Added pull-requests: write so the AI can successfully open the PR
 permissions:
@@ -16,7 +16,8 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  build:
+  # Job 1: Runs your build, install, and tests automatically
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -49,17 +50,38 @@ jobs:
       - name: Stage 3 - Run Maven Test
         run: mvn test
 
-      # Fixed the indentation here! 'if', 'env', and 'run' now align with 'name'
+      # Runs automatically ONLY if maven test fails
       - name: Stage 5 - AI Self-Healing Agent (Test Failures)
-        if: failure()
+        if: always()
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "Tests failed. Invoking AI self-healing script..."
           python .github/scripts/self_healer.py
 
-      - name: Stage 5 - AI Sonar Self-Healing Agent
+      - name: Stage 6 - Print Result
         if: always()
+        run: |
+          echo "Done with test. Result: ${{ job.status }}"
+
+  # Job 2: Pauses here and waits for you to click "Approve" in GitHub UI
+  sonar-analysis:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    
+    # This line tells GitHub to pause and wait for manual human approval
+    environment: manual-sonar-approval 
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Stage 5 - AI Sonar Self-Healing Agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -69,8 +91,3 @@ jobs:
         run: |
           echo "Running Sonar self-healing..."
           python .github/scripts/sonar_healer.py
-
-      - name: Stage 6 - Print Result
-        if: always()
-        run: |
-          echo "Done with test. Result: ${{ job.status }}"
