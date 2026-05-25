@@ -61,43 +61,43 @@ class GitManager:
             logger.warning(f"Could not configure git: {str(e)}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
-        """
-        Returns:
-            (branch_name, created_now)
-        """
-        try:
-            source_branch = os.environ.get("GITHUB_HEAD_REF") or self._get_current_branch()
 
-            safe_branch = source_branch.replace("/", "-")
-            branch_name = f"{prefix}-{safe_branch}"
+        source_branch = (
+            os.environ.get("GITHUB_HEAD_REF")
+            or self._get_current_branch()
+        )
 
-            self._run_git_command(["fetch", "origin"])
+        safe_branch = source_branch.replace("/", "-")
+        branch_name = f"{prefix}-{safe_branch}"
 
-            exists = subprocess.run(
-                ["git", "ls-remote", "--heads", "origin", branch_name],
-                cwd=self.workspace,
-                capture_output=True,
-                text=True
+        self._run_git_command(["fetch", "origin"], "Fetching origin")
+
+        exists = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin", branch_name],
+            cwd=self.workspace,
+            capture_output=True,
+            text=True
+        )
+
+        if exists.stdout.strip():
+            logger.info(f"Remote branch exists: {branch_name}")
+
+            self._run_git_command(
+                ["checkout", "-B", branch_name, f"origin/{branch_name}"],
+                f"Checking out {branch_name} from remote"
             )
 
-            if exists.stdout.strip():
-                logger.info(f"Existing AI fix branch found: {branch_name}")
+            return branch_name, False
 
-                self._run_git_command(["checkout", branch_name])
+        logger.info(f"Creating new branch: {branch_name}")
 
-                return branch_name, False
+        self._run_git_command(
+            ["checkout", "-b", branch_name],
+            f"Creating branch {branch_name}"
+        )
 
-            else:
-                logger.info(f"Creating new AI fix branch: {branch_name}")
+        return branch_name, True
 
-                self._run_git_command(["checkout", "-b", branch_name])
-
-                return branch_name, True
-
-        except Exception as e:
-            logger.error(f"Failed to create/reuse branch: {str(e)}")
-            raise
-    
     def commit_changes(
         self, 
         files: List[str],
