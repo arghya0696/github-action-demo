@@ -277,6 +277,9 @@ class GitManager:
             else:
                 logger.error(f"gh pr create failed: {result.stderr}")
                 return None
+            logger.error(f"gh pr create stderr: {result.stderr}")
+            logger.error(f"gh pr create stdout: {result.stdout}")
+
         
         except FileNotFoundError:
             logger.error("GitHub CLI (gh) not found. Install with: brew install gh")

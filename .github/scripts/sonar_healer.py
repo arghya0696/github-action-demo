@@ -174,11 +174,15 @@ Return ONLY the raw updated Java code. Do not include markdown formatting like `
 
 
 def commit_fixes(changed_files):
-    """Creates a new branch from the source branch, commits fixes, and pushes."""
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     git = GitManager(workspace)
 
-    source_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    source_branch = (
+        os.environ.get("GITHUB_HEAD_REF")
+        or os.environ.get("GITHUB_REF_NAME")
+        or "main"
+    )
+
     print(f"Source branch with Sonar issues: {source_branch}")
 
     branch_name, created_now = git.create_branch()
@@ -189,17 +193,25 @@ def commit_fixes(changed_files):
         message="fix: AI auto-fix for SonarCloud issues"
     )
 
-    if committed:
-        git.push_branch(branch_name)
-        print(f"Fixes committed and pushed to new branch '{branch_name}'.")
-        if created_now:
-            git.create_pr(
-                branch_name=branch_name,
-                files_changed=changed_files,
-                base_branch=source_branch
-            )
-    else:
+    if not committed:
         print("No changes to commit.")
+        return
+
+    git.push_branch(branch_name)
+
+    print(f"Fixes committed and pushed to new branch '{branch_name}'.")
+
+    # NEW: create PR
+    pr_url = git.create_pr(
+        branch_name=branch_name,
+        files_changed=changed_files,
+        base_branch=source_branch
+    )
+
+    if pr_url:
+        print(f"🎉 PR Created: {pr_url}")
+    else:
+        print("PR creation failed or PR already exists.")
 
 
 if __name__ == "__main__":
