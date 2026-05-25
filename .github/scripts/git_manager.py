@@ -62,10 +62,7 @@ class GitManager:
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
         """
-        Creates or reuses AI fix branch.
-
-        Returns:
-            (branch_name, created_now)
+        Creates or reuses the AI fix branch safely.
         """
 
         source_branch = (
@@ -74,23 +71,27 @@ class GitManager:
             or self._get_current_branch()
         )
 
-        branch_name = f"{prefix}-{source_branch.replace('/', '-')}"
+        safe_branch = source_branch.replace("/", "-")
+        branch_name = f"{prefix}-{safe_branch}"
 
         logger.info(f"Source branch: {source_branch}")
-        logger.info(f"AI fix branch: {branch_name}")
+        logger.info(f"AI branch: {branch_name}")
 
+        # always fetch latest refs
         self._run_git_command(["fetch", "origin"])
 
+        # check remote branch
         remote_exists = subprocess.run(
-            ["git", "ls-remote", "--exit-code", "--heads", "origin", branch_name],
+            ["git", "ls-remote", "--heads", "origin", branch_name],
             cwd=self.workspace,
             capture_output=True,
             text=True
         )
 
-        if remote_exists.returncode == 0:
-            logger.info(f"Branch already exists remotely: {branch_name}")
+        if remote_exists.stdout.strip():
+            logger.info(f"Remote branch exists. Checking out {branch_name}")
 
+            # create/reset local branch from remote
             self._run_git_command([
                 "checkout",
                 "-B",
@@ -100,7 +101,7 @@ class GitManager:
 
             return branch_name, False
 
-        logger.info(f"Creating new branch: {branch_name}")
+        logger.info(f"Creating new branch {branch_name}")
 
         self._run_git_command([
             "checkout",
