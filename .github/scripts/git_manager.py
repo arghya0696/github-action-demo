@@ -70,8 +70,6 @@ class GitManager:
         safe_branch = source_branch.replace("/", "-")
         branch_name = f"{prefix}-{safe_branch}"
 
-        self._run_git_command(["fetch", "origin"], "Fetching origin")
-
         exists = subprocess.run(
             ["git", "ls-remote", "--heads", "origin", branch_name],
             cwd=self.workspace,
@@ -83,8 +81,11 @@ class GitManager:
             logger.info(f"Remote branch exists: {branch_name}")
 
             self._run_git_command(
-                ["checkout", "-B", branch_name, f"origin/{branch_name}"],
-                f"Checking out {branch_name} from remote"
+                ["fetch", "origin", f"{branch_name}:{branch_name}"]
+            )
+
+            self._run_git_command(
+                ["checkout", branch_name]
             )
 
             return branch_name, False
@@ -92,8 +93,7 @@ class GitManager:
         logger.info(f"Creating new branch: {branch_name}")
 
         self._run_git_command(
-            ["checkout", "-b", branch_name],
-            f"Creating branch {branch_name}"
+            ["checkout", "-b", branch_name]
         )
 
         return branch_name, True
