@@ -173,7 +173,7 @@ class GitManager:
         except Exception as e:
             logger.error(f"Failed to commit: {str(e)}")
             return False
-    
+
     def push_branch(self, branch_name: str) -> bool:
         try:
             self._run_git_command([
