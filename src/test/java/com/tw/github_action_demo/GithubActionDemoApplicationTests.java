@@ -1,5 +1,6 @@
 package com.tw.github_action_demo;
 
+import com.tw.github_action_demo.failure.VehicleImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,6 +24,12 @@ class GithubActionDemoApplicationTests {
     void testClassCast() {
 
         castTestServiceImpl.testClassCast();
+    }
+
+    @Test
+    void testClassCast2() {
+        VehicleImpl vehicle = new VehicleImpl();
+        vehicle.testVehicle();
     }
 
 }
