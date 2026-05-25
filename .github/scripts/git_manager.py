@@ -61,14 +61,26 @@ class GitManager:
             logger.warning(f"Could not configure git: {str(e)}")
     
     def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
+        """
+        Creates or reuses ai-fix branch.
+
+        Returns:
+            (branch_name, created_now)
+        """
 
         source_branch = (
             os.environ.get("GITHUB_HEAD_REF")
+            or os.environ.get("GITHUB_REF_NAME")
             or self._get_current_branch()
         )
 
         safe_branch = source_branch.replace("/", "-")
         branch_name = f"{prefix}-{safe_branch}"
+
+        logger.info(f"Source branch: {source_branch}")
+        logger.info(f"AI fix branch: {branch_name}")
+
+        self._run_git_command(["fetch", "origin"])
 
         exists = subprocess.run(
             ["git", "ls-remote", "--heads", "origin", branch_name],
@@ -78,23 +90,35 @@ class GitManager:
         )
 
         if exists.stdout.strip():
-            logger.info(f"Remote branch exists: {branch_name}")
+            logger.info(f"Remote branch already exists: {branch_name}")
 
-            self._run_git_command(
-                ["fetch", "origin", f"{branch_name}:{branch_name}"]
+            result = subprocess.run(
+                ["git", "checkout", branch_name],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True
             )
 
-            self._run_git_command(
-                ["checkout", branch_name]
-            )
+            if result.returncode != 0:
+                logger.info("Local branch missing. Creating tracking branch.")
+
+                self._run_git_command([
+                    "checkout",
+                    "-b",
+                    branch_name,
+                    "--track",
+                    f"origin/{branch_name}"
+                ])
 
             return branch_name, False
 
         logger.info(f"Creating new branch: {branch_name}")
 
-        self._run_git_command(
-            ["checkout", "-b", branch_name]
-        )
+        self._run_git_command([
+            "checkout",
+            "-b",
+            branch_name
+        ])
 
         return branch_name, True
 

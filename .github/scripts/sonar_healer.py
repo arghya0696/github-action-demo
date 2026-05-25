@@ -184,6 +184,12 @@ def commit_fixes(changed_files):
     if committed:
         git.push_branch(branch_name)
         print(f"Fixes committed and pushed to new branch '{branch_name}'.")
+        if created_now:
+            git.create_pr(
+                branch_name=branch_name,
+                files_changed=changed_files,
+                base_branch=source_branch
+            )
     else:
         print("No changes to commit.")
 
