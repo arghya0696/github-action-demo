@@ -173,7 +173,7 @@ def commit_fixes(changed_files):
     source_branch = os.environ.get("GITHUB_REF_NAME", "master")
     print(f"Source branch with Sonar issues: {source_branch}")
 
-    branch_name = git.create_branch()
+    branch_name, created_now = git.create_branch()
     print(f"Created new branch: {branch_name}")
 
     committed = git.commit_changes(
