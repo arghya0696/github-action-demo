@@ -1,6 +1,5 @@
 package com.tw.github_action_demo.failure;
 
-public class Vehicle {
-    public void drive() {
-    }
+public interface Vehicle {
+    void drive();
 }
