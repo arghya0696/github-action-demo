@@ -60,44 +60,43 @@ class GitManager:
         except Exception as e:
             logger.warning(f"Could not configure git: {str(e)}")
     
-def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
-    """
-    Returns:
-        (branch_name, created_now)
-    """
-    try:
-        source_branch = os.environ.get("GITHUB_HEAD_REF") or self._get_current_branch()
+    def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
+        """
+        Returns:
+            (branch_name, created_now)
+        """
+        try:
+            source_branch = os.environ.get("GITHUB_HEAD_REF") or self._get_current_branch()
 
-        safe_branch = source_branch.replace("/", "-")
-        branch_name = f"{prefix}-{safe_branch}"
+            safe_branch = source_branch.replace("/", "-")
+            branch_name = f"{prefix}-{safe_branch}"
 
-        self._run_git_command(["fetch", "origin"])
+            self._run_git_command(["fetch", "origin"])
 
-        exists = subprocess.run(
-            ["git", "ls-remote", "--heads", "origin", branch_name],
-            cwd=self.workspace,
-            capture_output=True,
-            text=True
-        )
+            exists = subprocess.run(
+                ["git", "ls-remote", "--heads", "origin", branch_name],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True
+            )
 
-        if exists.stdout.strip():
-            logger.info(f"Existing AI fix branch found: {branch_name}")
+            if exists.stdout.strip():
+                logger.info(f"Existing AI fix branch found: {branch_name}")
 
-            self._run_git_command(["checkout", branch_name])
-            self._run_git_command(["pull", "origin", branch_name])
+                self._run_git_command(["checkout", branch_name])
 
-            return branch_name, False
+                return branch_name, False
 
-        else:
-            logger.info(f"Creating new AI fix branch: {branch_name}")
+            else:
+                logger.info(f"Creating new AI fix branch: {branch_name}")
 
-            self._run_git_command(["checkout", "-b", branch_name])
+                self._run_git_command(["checkout", "-b", branch_name])
 
-            return branch_name, True
+                return branch_name, True
 
-    except Exception as e:
-        logger.error(f"Failed to create/reuse branch: {str(e)}")
-        raise
+        except Exception as e:
+            logger.error(f"Failed to create/reuse branch: {str(e)}")
+            raise
     
     def commit_changes(
         self, 
