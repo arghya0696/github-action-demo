@@ -105,8 +105,7 @@ jobs:
           echo "Running Sonar self-healing..."
           python .github/scripts/sonar_healer.py
 
-          - name: Checkout Code
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-    
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
