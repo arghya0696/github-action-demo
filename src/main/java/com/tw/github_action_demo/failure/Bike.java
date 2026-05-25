@@ -1,5 +1,9 @@
 package com.tw.github_action_demo.failure;
 
+import java.util.logging.Logger;
+
 public class Bike extends Vehicle {
-    void ride() { System.out.println("Riding a bike"); }
+    private static final Logger LOGGER = Logger.getLogger(Bike.class.getName());
+
+    void ride() { LOGGER.info("Riding a bike"); }
 }
