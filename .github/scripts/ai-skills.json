@@ -1,5 +1,5 @@
 {
-  "max_retries": 3,
+  "max_retries": 5,
   "target_exceptions": [
     "java.lang.NullPointerException",
     "java.lang.ClassCastException",

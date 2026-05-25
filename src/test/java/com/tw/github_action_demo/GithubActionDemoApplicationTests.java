@@ -22,7 +22,7 @@ class GithubActionDemoApplicationTests {
 	@Test
 	void testClassCast() {
 
-		testService.test();
+		castTestServiceImpl.testClassCast();
 	}
 
 }
