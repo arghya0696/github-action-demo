@@ -12,7 +12,8 @@ public class NPETestServiceImpl {
     public void testNPE() {
         final Integer p = null;
         if (LOGGER.isLoggable(java.util.logging.Level.INFO)) {
-            LOGGER.info(String.valueOf(java.util.Optional.ofNullable(p).map(v -> v.compareTo(10)).orElse(null)));
+            final String value = String.valueOf(java.util.Optional.ofNullable(p).map(v -> v.compareTo(10)).orElse(null));
+            LOGGER.info(value);
         }
     }
 }
