@@ -168,31 +168,39 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     return message.content[0].text.replace('```java', '').replace('```', '').strip()
 
 def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> Optional[str]:
-    """Create feature branch, commit fixes, push branch, and open GitHub Pull Request."""
-    try:
-        if not fixes_applied:
-            return None
 
-        fixed_files = [fix["file"] for fix in fixes_applied if "file" in fix]
-
-        if not git_manager.has_uncommitted_changes(fixed_files):
-            logger.info("No new changes to commit. Skipping branch creation and PR.")
-            return None
-
-        branch_name = git_manager.create_branch()
-        logger.info(f"Created branch: {branch_name}")
-
-        if not git_manager.commit_changes(files=fixed_files):
-            logger.warning("Commit failed.")
-            return None
-
-        git_manager.push_branch(branch_name)
-        pr_url = git_manager.create_pr(branch_name=branch_name, files_changed=fixed_files)
-        logger.info(f"Created PR: {pr_url}")
-        return pr_url
-    except Exception as e:
-        logger.error(f"PR creation workflow failed: {str(e)}")
+    if not fixes_applied:
         return None
+
+    fixed_files = [fix["file"] for fix in fixes_applied]
+
+    if not git_manager.has_uncommitted_changes(fixed_files):
+        logger.info("No changes detected")
+        return None
+
+    branch_name, created_now = git_manager.create_branch()
+
+    if not git_manager.commit_changes(files=fixed_files):
+        return None
+
+    git_manager.push_branch(branch_name)
+
+    if created_now:
+        source_branch = (
+            os.environ.get("GITHUB_HEAD_REF")
+            or git_manager._get_current_branch()
+        )
+
+        pr_url = git_manager.create_pr(
+            branch_name=branch_name,
+            files_changed=fixed_files,
+            base_branch=source_branch
+        )
+
+        return pr_url
+
+    logger.info("Branch already exists — PR already exists or will update automatically.")
+    return None
 
 if __name__ == "__main__":
     workspace = Path(os.getcwd())

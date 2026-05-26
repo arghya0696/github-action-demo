@@ -28,73 +28,101 @@ class GitManager:
     def __init__(self, workspace: Path):
         """Initialize Git manager."""
         self.workspace = Path(workspace)
-        self._setup_git_config()
+
         self.github_token = os.environ.get("GITHUB_TOKEN")
         self.github_repo = os.environ.get("GITHUB_REPOSITORY", "unknown/repo")
-        
+        self._setup_git_config()
         logger.info(f"Git manager initialized for {self.workspace}")
         logger.info(f"Repository: {self.github_repo}")
     
     def _setup_git_config(self):
-        """Configure Git for automated commits."""
         try:
-            # Set committer identity for automated commits
             self._run_git_command(
-                ["config", "--local", "user.name", "github-actions[bot]"],
-                "Setting git user name"
+                ["config", "--local", "user.name", "github-actions[bot]"]
             )
-            
+
             self._run_git_command(
-                ["config", "--local", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
-                "Setting git user email"
+                ["config", "--local", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"]
             )
-            
-            # Configure for pushing
-            self._run_git_command(
-                ["config", "--local", "push.default", "current"],
-                "Configuring git push default"
-            )
-            
-            logger.info("Git configured for automated commits")
-        
-        except Exception as e:
-            logger.warning(f"Could not configure git: {str(e)}")
-    
-    def create_branch(self, prefix: str = "ai-fix") -> str:
-        """
-        Create or reuse a shared fix branch for the current CI run.
 
-        Branch naming convention: {prefix}-{GITHUB_RUN_ID or YYYYMMDD}
-        Both healers in the same workflow run resolve to the same branch name,
-        so all automated fixes land on one branch instead of separate ones.
-        """
-        try:
-            current_branch = self._get_current_branch()
-            logger.info(f"Current branch: {current_branch}")
-
-            run_id = os.environ.get("GITHUB_RUN_ID", datetime.now().strftime("%Y%m%d"))
-            branch_name = f"{prefix}-{run_id}"
-
-            if self._branch_exists(branch_name):
-                # Reuse the existing branch so all fixes accumulate on one branch
-                logger.info(f"Branch {branch_name} already exists, checking it out")
-                self._run_git_command(
-                    ["checkout", branch_name],
-                    f"Checking out existing branch {branch_name}"
+            if self.github_token and self.github_repo != "unknown/repo":
+                authenticated_remote = (
+                    f"https://x-access-token:{self.github_token}"
+                    f"@github.com/{self.github_repo}.git"
                 )
+
+                self._run_git_command([
+                    "remote",
+                    "set-url",
+                    "origin",
+                    authenticated_remote
+                ])
+
+            logger.info("Git configured successfully")
+
+        except Exception as e:
+            logger.warning(f"Git config failed: {e}")
+    
+    def create_branch(self, prefix: str = "ai-fix") -> tuple[str, bool]:
+        """
+        Create or reuse AI fix branch safely in GitHub Actions.
+        """
+
+        source_branch = (
+            os.environ.get("GITHUB_HEAD_REF")
+            or os.environ.get("GITHUB_REF_NAME")
+            or self._get_current_branch()
+        )
+
+        safe_branch = source_branch.replace("/", "-")
+        branch_name = f"{prefix}-{safe_branch}"
+
+        logger.info(f"Source branch: {source_branch}")
+        logger.info(f"AI branch: {branch_name}")
+
+        # always start from current checked-out commit
+        self._run_git_command(["fetch", "origin"])
+
+        remote_exists = subprocess.run(
+            ["git", "ls-remote", "--exit-code", "--heads", "origin", branch_name],
+            cwd=self.workspace,
+            capture_output=True,
+            text=True
+        )
+
+        if remote_exists.returncode == 0:
+            logger.info(f"Remote branch exists: {branch_name}")
+
+            # switch to branch if local exists
+            local_exists = subprocess.run(
+                ["git", "show-ref", "--verify", f"refs/heads/{branch_name}"],
+                cwd=self.workspace,
+                capture_output=True
+            )
+
+            if local_exists.returncode == 0:
+                self._run_git_command(["checkout", branch_name])
             else:
-                self._run_git_command(
-                    ["checkout", "-b", branch_name],
-                    f"Creating branch {branch_name}"
-                )
+                self._run_git_command([
+                    "checkout",
+                    "-b",
+                    branch_name
+                ])
 
-            logger.info(f"✓ On branch: {branch_name}")
-            return branch_name
+            return branch_name, False
 
-        except Exception as e:
-            logger.error(f"Failed to create branch: {str(e)}")
-            raise
-    
+        logger.info(f"Creating new branch: {branch_name}")
+
+        self._run_git_command([
+            "checkout",
+            "-b",
+            branch_name
+        ])
+
+        return branch_name, True
+
+
+
     def commit_changes(
         self, 
         files: List[str],
@@ -148,26 +176,22 @@ class GitManager:
         except Exception as e:
             logger.error(f"Failed to commit: {str(e)}")
             return False
-    
+
     def push_branch(self, branch_name: str) -> bool:
-        """
-        Push feature branch to remote.
-        
-        Args:
-            branch_name: Name of branch to push
-        """
         try:
-            # Push to origin
-            self._run_git_command(
-                ["push", "origin", branch_name, "--set-upstream"],
-                f"Pushing {branch_name} to origin"
-            )
-            
-            logger.info(f"✓ Pushed branch: {branch_name}")
+            self._run_git_command([
+                "push",
+                "--force-with-lease",
+                "--set-upstream",
+                "origin",
+                branch_name
+            ])
+
+            logger.info(f"Pushed branch {branch_name}")
             return True
-        
+
         except Exception as e:
-            logger.error(f"Failed to push branch: {str(e)}")
+            logger.error(f"Push failed: {e}")
             raise
     
     def create_pr(
@@ -253,6 +277,9 @@ class GitManager:
             else:
                 logger.error(f"gh pr create failed: {result.stderr}")
                 return None
+            logger.error(f"gh pr create stderr: {result.stderr}")
+            logger.error(f"gh pr create stdout: {result.stdout}")
+
         
         except FileNotFoundError:
             logger.error("GitHub CLI (gh) not found. Install with: brew install gh")
@@ -342,6 +369,18 @@ This pull request was automatically generated to fix test failures detected duri
                     result.stderr
                 )
             
+            if result.returncode != 0:
+                logger.error(f"Git command failed: {' '.join(cmd)}")
+                logger.error(f"stdout: {result.stdout}")
+                logger.error(f"stderr: {result.stderr}")
+
+                raise subprocess.CalledProcessError(
+                    result.returncode,
+                    cmd,
+                    result.stdout,
+                    result.stderr
+                )
+
             return result.stdout.strip()
         
         except subprocess.TimeoutExpired:
@@ -350,6 +389,10 @@ This pull request was automatically generated to fix test failures detected duri
         except Exception as e:
             logger.error(f"Git command failed: {' '.join(args)}")
             raise
+        if result.returncode != 0:
+            logger.error(f"Command failed: {' '.join(cmd)}")
+            logger.error(f"stdout:\n{result.stdout}")
+            logger.error(f"stderr:\n{result.stderr}")
     
     def _get_current_branch(self) -> str:
         """Get current branch name."""

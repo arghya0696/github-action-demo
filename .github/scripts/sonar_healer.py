@@ -29,15 +29,23 @@ def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
 
 
 def run_sonar_scan():
-    """Triggers a SonarCloud analysis via Maven and streams output to the console."""
     print("Starting SonarCloud analysis via Maven...")
 
-    # sonar.organization, sonar.projectKey, and sonar.host.url are defined in pom.xml
-    cmd = ["mvn", "sonar:sonar", f"-Dsonar.token={SONAR_TOKEN}"]
+    cmd = [
+        "mvn",
+        "clean",
+        "verify",
+        "sonar:sonar",
+        f"-Dsonar.token={SONAR_TOKEN}"
+    ]
 
     result = subprocess.run(cmd)
+
     if result.returncode != 0:
-        print("Warning: Maven Sonar scan exited with a non-zero status. Proceeding anyway.")
+        print("Warning: Maven Sonar scan exited with non-zero status. Proceeding anyway.")
+        logger.error(f"Command failed: {' '.join(cmd)}")
+        logger.error(f"stdout: {result.stdout}")
+        logger.error(f"stderr: {result.stderr}")
     else:
         print("SonarCloud scan submitted successfully.")
 
@@ -166,14 +174,18 @@ Return ONLY the raw updated Java code. Do not include markdown formatting like `
 
 
 def commit_fixes(changed_files):
-    """Creates a new branch from the source branch, commits fixes, and pushes."""
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     git = GitManager(workspace)
 
-    source_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    source_branch = (
+        os.environ.get("GITHUB_HEAD_REF")
+        or os.environ.get("GITHUB_REF_NAME")
+        or "main"
+    )
+
     print(f"Source branch with Sonar issues: {source_branch}")
 
-    branch_name = git.create_branch()
+    branch_name, created_now = git.create_branch()
     print(f"Created new branch: {branch_name}")
 
     committed = git.commit_changes(
@@ -181,11 +193,25 @@ def commit_fixes(changed_files):
         message="fix: AI auto-fix for SonarCloud issues"
     )
 
-    if committed:
-        git.push_branch(branch_name)
-        print(f"Fixes committed and pushed to new branch '{branch_name}'.")
-    else:
+    if not committed:
         print("No changes to commit.")
+        return
+
+    git.push_branch(branch_name)
+
+    print(f"Fixes committed and pushed to new branch '{branch_name}'.")
+
+    # NEW: create PR
+    pr_url = git.create_pr(
+        branch_name=branch_name,
+        files_changed=changed_files,
+        base_branch=source_branch
+    )
+
+    if pr_url:
+        print(f"🎉 PR Created: {pr_url}")
+    else:
+        print("PR creation failed or PR already exists.")
 
 
 if __name__ == "__main__":
