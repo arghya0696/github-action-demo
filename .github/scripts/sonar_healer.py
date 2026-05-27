@@ -177,13 +177,9 @@ def commit_fixes(changed_files):
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     git = GitManager(workspace)
 
-    source_branch = (
-        os.environ.get("GITHUB_HEAD_REF")
-        or os.environ.get("GITHUB_REF_NAME")
-        or "main"
-    )
-
-    print(f"Source branch with Sonar issues: {source_branch}")
+    # Capture source branch BEFORE create_branch() switches to the fix branch
+    source_branch = os.environ.get("GITHUB_REF_NAME", "master")
+    print(f"Source branch: {source_branch}")
 
     branch_name, created_now = git.create_branch()
     print(f"Created new branch: {branch_name}")

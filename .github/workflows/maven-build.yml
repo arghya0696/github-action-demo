@@ -2,7 +2,9 @@ name: Spring Boot Build and Test
 
 on:
   push:
-    branches: '**'
+    branches:
+      - '**'
+      - '!ai-fix-**'
   pull_request:
     branches: '**'
   workflow_dispatch: 
