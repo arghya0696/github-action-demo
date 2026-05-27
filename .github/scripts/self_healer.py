@@ -93,6 +93,10 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     prompt = f"""
     Analyze the following Java stack trace or compilation error log to identify the main project source files that need to be modified.
     
+    CRITICAL EXTRACTION CONSTRAINTS:
+    1. Your primary goal is to find the broken APPLICATION source code (e.g., files in src/main/java).
+    2. DO NOT return Test classes (e.g., GithubActionDemoApplicationTests.java) just because the test failed. You must trace the error down the stack to find the actual service or component causing the failure.
+    
     {dynamic_knowledge_base}
     
     Stack Trace / Error Log:
@@ -137,8 +141,8 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     
     CRITICAL CONSTRAINTS:
     1. NEVER delete, skip, or comment out test cases (e.g., `@Test` methods) to resolve a failure. 
-    2. Never delete existing tests , only update are allowed
-    3. If a test is failing, you must try to fix the underlying source code logic. Then move to test fix.
+    2. If you are explicitly provided a Test file to fix, you may ONLY update assertions, mock behaviors, or fix syntax errors. You CANNOT remove the test logic.
+    3. Your primary goal is to fix the underlying source code logic to make the tests pass naturally.
     
     ### TEAM CODING STANDARDS ###
     {coding_standards}
