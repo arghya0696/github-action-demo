@@ -197,17 +197,26 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
 
     git_manager.push_branch(branch_name)
 
+    pr_state = git_manager.get_pr_state(branch_name)
+
     if created_now:
-        pr_url = git_manager.create_pr(
+        return git_manager.create_pr(
             branch_name=branch_name,
             files_changed=fixed_files,
             base_branch=source_branch
         )
-        logger.info(
-            "BBranch already exists. Updating existing PR branch."
-        )
+
+    if pr_state == "OPEN":
+        logger.info("Existing PR is open — branch updated automatically.")
         return git_manager.get_existing_pr_url(branch_name)
-    return None
+
+    logger.info("Branch exists but PR is merged/closed — creating a new PR.")
+
+    return git_manager.create_pr(
+        branch_name=branch_name,
+        files_changed=fixed_files,
+        base_branch=source_branch
+    )
 
 if __name__ == "__main__":
     workspace = Path(os.getcwd())
