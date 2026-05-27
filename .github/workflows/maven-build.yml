@@ -52,7 +52,7 @@ jobs:
 
       # Runs automatically ONLY if maven test fails
       - name: Stage 5 - AI Self-Healing Agent (Test Failures)
-        if: failure()
+        if: always()
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
