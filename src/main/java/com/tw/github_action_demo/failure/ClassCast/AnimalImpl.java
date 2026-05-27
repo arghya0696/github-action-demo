@@ -5,6 +5,8 @@ public class AnimalImpl {
     public void testClassCastException() {
         Animal myPet = new Dog();
 
-        Cat myCat = (Cat) myPet;
+        if (myPet instanceof Cat myCat) {
+            // use myCat here if needed
+        }
     }
 }

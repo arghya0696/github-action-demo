@@ -1,27 +1,14 @@
-package com.tw.github_action_demo;
+package com.tw.github_action_demo.failure.ClassCast;
 
-import com.tw.github_action_demo.failure.ClassCast.AnimalImpl;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+class AnimalImpl {
 
-@SpringBootTest
-class GithubActionDemoApplicationTests {
+    public void testClassCastException() {
+        final Animal animal = new Dog();
 
-    @Autowired
-    TestService testService;
-
-    @Test
-    void testNPE() {
-
-        testService.test();
+        if (animal instanceof Cat cat) {
+            cat.meow();
+        } else if (animal instanceof Dog dog) {
+            dog.bark();
+        }
     }
-
-    @Test
-    void testClassCast() {
-        AnimalImpl animal = new AnimalImpl();
-
-        animal.testClassCastException();
-    }
-
 }
