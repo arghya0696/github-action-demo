@@ -179,6 +179,14 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         logger.info("No changes detected")
         return None
 
+    # Capture source branch BEFORE create_branch() switches to the fix branch
+    source_branch = (
+        os.environ.get("GITHUB_HEAD_REF")
+        or os.environ.get("GITHUB_REF_NAME")
+        or git_manager._get_current_branch()
+    )
+    logger.info(f"Source branch: {source_branch}")
+
     branch_name, created_now = git_manager.create_branch()
 
     if not git_manager.commit_changes(files=fixed_files):
@@ -187,11 +195,6 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
     git_manager.push_branch(branch_name)
 
     if created_now:
-        source_branch = (
-            os.environ.get("GITHUB_HEAD_REF")
-            or git_manager._get_current_branch()
-        )
-
         pr_url = git_manager.create_pr(
             branch_name=branch_name,
             files_changed=fixed_files,
