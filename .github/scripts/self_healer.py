@@ -137,7 +137,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     
     CRITICAL CONSTRAINTS:
     1. NEVER delete, skip, or comment out test cases (e.g., `@Test` methods) to resolve a failure. 
-    2. Never delete existing tests , only update are allowed
+    2. Never delete existing tests.
     3. If a test is failing, you must try to fix the underlying source code logic. Then move to test fix.
     
     ### TEAM CODING STANDARDS ###
@@ -156,6 +156,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     {java_code}
     
     Fix the {exc_type} in the code addressing the root cause indicated by the stack trace or compiler error.
+    Try to fix the code , dont delete any test
     Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
     """
 
