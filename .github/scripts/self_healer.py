@@ -179,13 +179,12 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         logger.info("No changes detected")
         return None
 
-    # Capture source branch BEFORE create_branch() switches to the fix branch
+    # capture original branch BEFORE checkout
     source_branch = (
         os.environ.get("GITHUB_HEAD_REF")
         or os.environ.get("GITHUB_REF_NAME")
         or git_manager._get_current_branch()
     )
-    logger.info(f"Source branch: {source_branch}")
 
     branch_name, created_now = git_manager.create_branch()
 
@@ -200,10 +199,10 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
             files_changed=fixed_files,
             base_branch=source_branch
         )
-
-        return pr_url
-
-    logger.info("Branch already exists — PR already exists or will update automatically.")
+        logger.info(
+            "BBranch already exists. Updating existing PR branch."
+        )
+        return git_manager.get_existing_pr_url(branch_name)
     return None
 
 if __name__ == "__main__":

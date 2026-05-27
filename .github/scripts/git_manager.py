@@ -467,6 +467,38 @@ This pull request was automatically generated to fix test failures detected duri
             logger.warning(f"Could not cleanup branch: {str(e)}")
             return False
 
+    def get_existing_pr_url(self, branch_name: str) -> Optional[str]:
+        try:
+            if self.github_token:
+                os.environ["GH_TOKEN"] = self.github_token
+
+            result = subprocess.run(
+                [
+                    "gh",
+                    "pr",
+                    "view",
+                    branch_name,
+                    "--repo",
+                    self.github_repo,
+                    "--json",
+                    "url",
+                    "--jq",
+                    ".url"
+                ],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                return result.stdout.strip()
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Could not fetch existing PR: {e}")
+            return None
+
 
 class GitDiff:
     """Analyze git diffs to understand changes."""
