@@ -1,6 +1,6 @@
 package com.tw.github_action_demo;
 
-import com.tw.github_action_demo.failure.VehicleImpl;
+import com.tw.github_action_demo.failure.ClassCast.AnimalImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,9 +11,6 @@ class GithubActionDemoApplicationTests {
     @Autowired
     TestService testService;
 
-    @Autowired
-    CastTestServiceImpl castTestServiceImpl;
-
     @Test
     void testNPE() {
 
@@ -22,14 +19,9 @@ class GithubActionDemoApplicationTests {
 
     @Test
     void testClassCast() {
+        AnimalImpl animal = new AnimalImpl();
 
-        castTestServiceImpl.testClassCast();
-    }
-
-    @Test
-    void testClassCast2() {
-        VehicleImpl vehicle = new VehicleImpl();
-        vehicle.testVehicle();
+        animal.testClassCastException();
     }
 
 }

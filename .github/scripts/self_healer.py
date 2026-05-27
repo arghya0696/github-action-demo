@@ -17,7 +17,6 @@ if not api_key:
     exit(1)
 
 client = anthropic.Anthropic(api_key=api_key)
-CLAUDE_MODEL = "claude-sonnet-4-6"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -31,6 +30,8 @@ def load_skills(file_path=".github/scripts/ai-skills.json"):
     else:
         logger.warning(f"{file_path} not found. Proceeding with default skills.")
         return {
+            "model_version": "claude-sonnet-4-6",
+            "test_reports_glob": "target/surefire-reports/*.txt",
             "target_exceptions": [],
             "file_extraction_rules": [
                 "Look for the highest user-created classes in the execution stack.",
@@ -60,9 +61,9 @@ def build_dynamic_context(skills: dict) -> str:
 
     return "\n\n".join(context_blocks)
 
-def find_exception_in_reports(target_exceptions):
-    """Scans Maven surefire reports for target exceptions."""
-    reports = glob.glob('target/surefire-reports/*.txt')
+def find_exception_in_reports(target_exceptions, reports_glob):
+    """Scans test reports for target exceptions."""
+    reports = glob.glob(reports_glob)
 
     fallback_content, fallback_exc_type = None, None
 
@@ -87,6 +88,7 @@ def find_exception_in_reports(target_exceptions):
 def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     """Uses Claude to intelligently identify ALL failing files from the stack trace or compiler log."""
     dynamic_knowledge_base = build_dynamic_context(skills)
+    model_version = skills.get("model_version", "claude-3-5-sonnet-20241022")
 
     prompt = f"""
     Analyze the following Java stack trace or compilation error log to identify the main project source files that need to be modified.
@@ -100,7 +102,7 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     """
 
     message = client.messages.create(
-        model=CLAUDE_MODEL,
+        model=model_version,
         max_tokens=150,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -127,6 +129,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         java_code = file.read()
 
     dynamic_knowledge_base = build_dynamic_context(skills)
+    model_version = skills.get("model_version", "claude-3-5-sonnet-20241022")
 
     system_instructions = f"""
     You are a Senior Java Staff Engineer resolving CI/CD pipeline failures. 
@@ -134,7 +137,8 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     
     CRITICAL CONSTRAINTS:
     1. NEVER delete, skip, or comment out test cases (e.g., `@Test` methods) to resolve a failure. 
-    2. If a test is failing, you must either fix the underlying source code logic, or legitimately update the test assertions/mocks to match the correct expected behavior.
+    2. Never delete existing tests , only update are allowed
+    3. If a test is failing, you must try to fix the underlying source code logic. Then move to test fix.
     
     ### TEAM CODING STANDARDS ###
     {coding_standards}
@@ -156,7 +160,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     """
 
     message = client.messages.create(
-        model=CLAUDE_MODEL,
+        model=model_version,
         max_tokens=4000,
         system=system_instructions,
         messages=[{"role": "user", "content": user_prompt}]
@@ -211,10 +215,11 @@ if __name__ == "__main__":
     standards = get_coding_standards(".github/scripts/coding-standards.md")
 
     MAX_RETRIES = skills.get("max_retries", 3)
+    reports_glob = skills.get("test_reports_glob", "target/surefire-reports/*.txt")
+    reports_dir = os.path.dirname(reports_glob) or "."
+
     attempt = 1
     success = False
-
-    # Store compilation errors if the AI breaks syntax in a previous attempt
     compilation_error_output = None
 
     logger.info(f"Starting Self-Healing Loop (Max Attempts: {MAX_RETRIES})")
@@ -222,14 +227,13 @@ if __name__ == "__main__":
     while attempt <= MAX_RETRIES:
         logger.info(f"--- Attempt {attempt} of {MAX_RETRIES} ---")
 
-        # If we have a compilation error from a previous loop, use that instead of searching reports
         if compilation_error_output:
             logger.info("Using compilation error output from previous attempt...")
             stack_trace = compilation_error_output
             exc_type = "Java Compilation Error"
-            compilation_error_output = None  # Reset for next loop
+            compilation_error_output = None
         else:
-            stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []))
+            stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []), reports_glob)
 
             if not stack_trace or not exc_type:
                 if attempt == 1:
@@ -256,10 +260,10 @@ if __name__ == "__main__":
 
             modified_files_map[file_path] = exc_type
 
-        reports_dir = "target/surefire-reports"
+        # Use the dynamic directory extracted from the glob for cleanup
         if os.path.exists(reports_dir):
             shutil.rmtree(reports_dir)
-            logger.info("Cleaned up old surefire reports.")
+            logger.info(f"Cleaned up old test reports at {reports_dir}.")
 
         logger.info("Running Maven test to validate fixes...")
         test_result = subprocess.run(["mvn", "test"], capture_output=True, text=True)
@@ -271,10 +275,9 @@ if __name__ == "__main__":
         else:
             logger.error(f"❌ Fix validation failed on attempt {attempt}.")
 
-            # Check if it was a compilation failure (surefire-reports directory was never generated)
-            if not os.path.exists(reports_dir) or not glob.glob(f"{reports_dir}/*.txt"):
+            # Validate against the dynamic paths
+            if not os.path.exists(reports_dir) or not glob.glob(reports_glob):
                 logger.error("Compilation failed. Extracting Maven error log for AI correction.")
-                # Pass the last 4000 characters of the terminal output so Claude can read the compiler error
                 compilation_error_output = test_result.stdout[-4000:]
 
             attempt += 1
