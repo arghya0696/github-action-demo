@@ -1,7 +1,7 @@
 {
   "model_version": "claude-sonnet-4-6",
   "test_reports_glob": "target/surefire-reports/*.txt",
-  "max_retries": 5,
+  "max_retries": 10,
   "target_exceptions": [
     "java.lang.NullPointerException",
     "java.lang.ClassCastException",
