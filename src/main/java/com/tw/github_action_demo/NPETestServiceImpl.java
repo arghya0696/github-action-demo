@@ -12,11 +12,9 @@ public class NPETestServiceImpl {
     private static final Logger LOGGER = Logger.getLogger(NPETestServiceImpl.class.getName());
 
     public void testNPE() {
-        final Integer p = 5;
+        final Integer p = null;
 
-        final int compareTo = Optional.ofNullable(p)
-                .map(value -> value.compareTo(10))
-                .orElseThrow(() -> new IllegalArgumentException("Value 'p' must not be null"));
+        final int compareTo = p.compareTo(10);
 
         LOGGER.log(Level.INFO, String.valueOf(compareTo));
     }
