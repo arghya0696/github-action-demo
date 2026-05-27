@@ -1,4 +1,5 @@
 package com.tw.github_action_demo.failure.ClassCast;
 
-public class Animal {
+public interface Animal {
+    void run();
 }
