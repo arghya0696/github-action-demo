@@ -18,6 +18,8 @@ public class NPETestServiceImpl {
                 .map(value -> value.compareTo(10))
                 .orElseThrow(() -> new IllegalArgumentException("Value 'p' must not be null"));
 
-        LOGGER.log(Level.INFO, String.valueOf(compareTo));
+        if (LOGGER.isLoggable(Level.INFO)) {
+            LOGGER.log(Level.INFO, String.valueOf(compareTo));
+        }
     }
 }
