@@ -499,6 +499,39 @@ This pull request was automatically generated to fix test failures detected duri
             logger.warning(f"Could not fetch existing PR: {e}")
             return None
 
+    def get_pr_state(self, branch_name: str) -> Optional[str]:
+        try:
+            if self.github_token:
+                os.environ["GH_TOKEN"] = self.github_token
+
+            result = subprocess.run(
+                [
+                    "gh",
+                    "pr",
+                    "list",
+                    "--head",
+                    branch_name,
+                    "--repo",
+                    self.github_repo,
+                    "--json",
+                    "state",
+                    "--jq",
+                    ".[0].state"
+                ],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                state = result.stdout.strip()
+                return state if state else None
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Could not determine PR state: {e}")
+            return None
 
 class GitDiff:
     """Analyze git diffs to understand changes."""
