@@ -3,7 +3,7 @@ package com.tw.github_action_demo.failure.ClassCast;
 public class AnimalImpl {
 
     public void testClassCastException() {
-        Animal myPet = new Dog();
+        Animal myPet = new Cat();
 
         Cat myCat = (Cat) myPet;
 
