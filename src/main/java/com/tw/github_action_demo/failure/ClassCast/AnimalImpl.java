@@ -5,8 +5,8 @@ public class AnimalImpl {
     public void testClassCastException() {
         Animal myPet = new Dog();
 
-        Cat myCat = (Cat) myPet;
+        Dog myDog = (Dog) myPet;
 
-        myCat.run();
+        myDog.run();
     }
 }
