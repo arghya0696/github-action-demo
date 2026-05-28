@@ -25,7 +25,8 @@ public class NPETestServiceImpl {
     public void printLogs(){
         try{
             Integer i = null;
-            LOGGER.log(Level.INFO, "Is q equals to 10? ", i.equals(10));
+            final boolean result = Optional.ofNullable(i).map(val -> val.equals(10)).orElse(false);
+            LOGGER.log(Level.INFO, "Is q equals to 10? " + result);
         } catch (Exception e){
             e.printStackTrace();
             LOGGER.log(Level.INFO, "Error while performing action : " + e.getMessage());
