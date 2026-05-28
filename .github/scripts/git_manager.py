@@ -271,14 +271,29 @@ class GitManager:
             )
             
             if result.returncode == 0:
-                # Extract PR URL from output
-                pr_url = result.stdout.strip()
-                return pr_url
-            else:
-                logger.error(f"gh pr create failed: {result.stderr}")
-                return None
-            logger.error(f"gh pr create stderr: {result.stderr}")
-            logger.error(f"gh pr create stdout: {result.stdout}")
+                return result.stdout.strip()
+
+            stderr = result.stderr.strip()
+            if "already exists" in stderr:
+                check = subprocess.run(
+                    ["gh", "pr", "view", head, "--json", "state,url", "--jq", "[.state, .url] | @tsv",
+                     "--repo", self.github_repo],
+                    cwd=self.workspace, capture_output=True, text=True, timeout=30
+                )
+                if check.returncode == 0:
+                    state, pr_url = check.stdout.strip().split("\t")
+                    if state.upper() == "OPEN":
+                        logger.info(f"Open PR already exists: {pr_url}")
+                        return pr_url
+                    else:
+                        logger.info(f"Existing PR is {state} — creating a new branch with incremented suffix.")
+                        new_branch = self._next_branch_name(head)
+                        self._run_git_command(["checkout", "-b", new_branch], f"Creating branch {new_branch}")
+                        self._run_git_command(["push", "origin", new_branch, "--set-upstream"], f"Pushing {new_branch}")
+                        return self._create_pr_with_gh_cli(title, body, new_branch, base)
+
+            print(f"gh pr create failed (exit {result.returncode}): {stderr}")
+            return None
 
         
         except FileNotFoundError:
@@ -438,6 +453,13 @@ This pull request was automatically generated to fix test failures detected duri
             return bool(result.stdout.strip())
         except Exception:
             return False
+
+    def _next_branch_name(self, base_branch: str) -> str:
+        """Returns ai-fix-{base_branch}-1, -2, -3 ... based on existing branches."""
+        counter = 1
+        while self._branch_exists(f"{base_branch}-{counter}"):
+            counter += 1
+        return f"{base_branch}-{counter}"
 
     def _branch_exists(self, branch_name: str) -> bool:
         """Check if branch exists locally or remotely."""
