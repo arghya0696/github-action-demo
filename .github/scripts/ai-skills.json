@@ -1,5 +1,5 @@
 {
-  "model_version": "claude-sonnet-4-6",
+  "model_version": "claude-3-5-sonnet-20241022",
   "test_reports_glob": "target/surefire-reports/*.txt",
   "test_command": ["mvn", "test"],
   "cleanup_directories": ["target/surefire-reports"],
@@ -17,12 +17,7 @@
     "{dynamic_knowledge_base}",
     "",
     "Stack Trace / Error Log:",
-    "{stack_trace}",
-    "",
-    "Return the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:",
-    "<files>",
-    "[\"NPETestServiceImpl.java\"]",
-    "</files>"
+    "{stack_trace}"
   ],
 
   "fix_generation_system_prompt": [
@@ -50,11 +45,7 @@
     "Code (File: {file_path}):",
     "{code}",
     "",
-    "Fix the {exc_type} in the code addressing the root cause indicated by the stack trace or compiler error.",
-    "Return the updated code wrapped EXACTLY in <code> tags. NO markdown. NO preamble.",
-    "<code>",
-    "package com.tw...",
-    "</code>"
+    "Fix the {exc_type} in the code addressing the root cause indicated by the stack trace or compiler error."
   ],
 
   "target_exceptions": [

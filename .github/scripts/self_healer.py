@@ -94,13 +94,16 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     dynamic_knowledge_base = build_dynamic_context(skills)
     model_version = skills["model_version"]
 
-    default_prompt = "Identify broken files.\n{dynamic_knowledge_base}\nLog:\n{stack_trace}\nReturn JSON."
+    default_prompt = "Identify broken files.\n{dynamic_knowledge_base}\nLog:\n{stack_trace}"
     raw_prompt = parse_prompt_config(skills.get("file_extraction_prompt"), default_prompt)
 
     prompt = raw_prompt.format(
         dynamic_knowledge_base=dynamic_knowledge_base,
         stack_trace=stack_trace
     )
+
+    # HARDCODED XML EXTRACTION REQUIREMENT
+    prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:\n<files>\n[\"NPETestServiceImpl.java\"]\n</files>"
 
     message = client.messages.create(
         model=model_version,
@@ -110,7 +113,6 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
 
     raw_output = message.content[0].text.strip()
 
-    # NEW REGEX EXTRACTION: Ignore preamble, find only what's between <files> tags
     match = re.search(r'<files>\s*(.*?)\s*</files>', raw_output, re.DOTALL)
 
     try:
@@ -118,7 +120,6 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
             json_str = match.group(1).replace("```json", "").replace("```", "").strip()
             file_names = json.loads(json_str)
         else:
-            # Fallback if AI forgot tags but generated a raw array
             clean_str = re.sub(r'^.*?(\[.*\]).*$', r'\1', raw_output, flags=re.DOTALL)
             file_names = json.loads(clean_str)
 
@@ -149,7 +150,7 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         dynamic_knowledge_base=dynamic_knowledge_base
     )
 
-    default_user = "Error: {exc_type}\nLog:\n{stack_trace}\nCode:\n{code}\nReturn ONLY updated code."
+    default_user = "Error: {exc_type}\nLog:\n{stack_trace}\nCode:\n{code}"
     raw_user_prompt = parse_prompt_config(skills.get("fix_generation_user_prompt"), default_user)
 
     user_prompt = raw_user_prompt.format(
@@ -158,6 +159,9 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         file_path=file_path,
         code=code_content
     )
+
+    # HARDCODED XML EXTRACTION REQUIREMENT
+    user_prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the updated code wrapped EXACTLY in <code> tags. NO markdown. NO preamble.\nExample:\n<code>\npackage com.example...\n</code>"
 
     message = client.messages.create(
         model=model_version,
@@ -168,13 +172,11 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
 
     raw_output = message.content[0].text
 
-    # NEW REGEX EXTRACTION: Strip preamble/markdown and find only what's between <code> tags
     match = re.search(r'<code>\s*(.*?)\s*</code>', raw_output, re.DOTALL)
 
     if match:
         fixed_code = match.group(1).strip()
     else:
-        # Fallback in case it ignores tags but uses markdown
         fixed_code = re.sub(r'^```[a-zA-Z]*\n', '', raw_output)
         fixed_code = fixed_code.replace('```', '').strip()
 
