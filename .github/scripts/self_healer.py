@@ -102,8 +102,8 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
         stack_trace=stack_trace
     )
 
-    # HARDCODED XML EXTRACTION REQUIREMENT
-    prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:\n<files>\n[\"NPETestServiceImpl.java\"]\n</files>"
+    # HARDCODED XML EXTRACTION REQUIREMENT (Language Agnostic)
+    prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:\n<files>\n[\"path/to/broken_file.ext\"]\n</files>"
 
     message = client.messages.create(
         model=model_version,
@@ -160,8 +160,8 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         code=code_content
     )
 
-    # HARDCODED XML EXTRACTION REQUIREMENT
-    user_prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the updated code wrapped EXACTLY in <code> tags. NO markdown. NO preamble.\nExample:\n<code>\npackage com.example...\n</code>"
+    # HARDCODED XML EXTRACTION REQUIREMENT (Language Agnostic)
+    user_prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the updated code wrapped EXACTLY in <code> tags. NO markdown. NO preamble.\nExample:\n<code>\n// your updated code here...\n</code>"
 
     message = client.messages.create(
         model=model_version,
