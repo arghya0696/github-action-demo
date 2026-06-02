@@ -102,17 +102,19 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
         stack_trace=stack_trace
     )
 
-    # HARDCODED XML EXTRACTION REQUIREMENT (Language Agnostic)
-    # Added strict rules against conversational text
+    # HARDCODED XML EXTRACTION REQUIREMENT
     prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nYou MUST NOT output any explanations, reasoning, or conversational text. Return ONLY the XML block.\nReturn the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:\n<files>\n[\"path/to/broken_file.ext\"]\n</files>"
 
     message = client.messages.create(
         model=model_version,
-        max_tokens=500, # Increased from 150 to 500 to prevent mid-thought cutoffs
+        max_tokens=500,
         messages=[{"role": "user", "content": prompt}]
     )
 
     raw_output = message.content[0].text.strip()
+
+    # Log Claude's raw output so we can see exactly what it's thinking if it breaks!
+    logger.info(f"AI Raw Extraction Output:\n{raw_output}")
 
     match = re.search(r'<files>\s*(.*?)\s*</files>', raw_output, re.DOTALL)
 
@@ -126,14 +128,26 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
 
         found_paths = []
         for file_name in file_names:
+            # 1. If Claude returned a perfectly valid relative path, use it directly
+            if os.path.isfile(file_name):
+                found_paths.append(file_name)
+                continue
+
+            # 2. Otherwise, extract the base name and search the repository for it
+            basename = os.path.basename(file_name)
+            found = False
             for root, dirs, files in os.walk('.'):
-                if file_name in files:
-                    found_paths.append(os.path.join(root, file_name))
+                if basename in files:
+                    found_paths.append(os.path.join(root, basename))
+                    found = True
                     break
+
+            if not found:
+                logger.warning(f"AI suggested '{file_name}', but it does not exist in the repository.")
 
         return found_paths
     except json.JSONDecodeError:
-        logger.error(f"Failed to parse AI file identification response: {raw_output}")
+        logger.error(f"Failed to parse AI file identification response.")
         return []
 
 def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
