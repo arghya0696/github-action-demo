@@ -3,7 +3,7 @@
   "test_reports_glob": "target/surefire-reports/*.txt",
   "test_command": ["mvn", "test"],
   "cleanup_directories": ["target/surefire-reports"],
-  "max_retries": 5,
+  "max_retries": 10,
   "compilation_error_identifier": "Java Compilation Error",
   "fallback_exception_regex": "([a-zA-Z0-9_.]+(?:Exception|Error|Failure))",
 
