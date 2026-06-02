@@ -22,14 +22,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 def load_skills(file_path=".github/scripts/ai-skills.json"):
-    """Loads the AI skills from an external JSON file and enforces mandatory fields."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Configuration file {file_path} is missing. Cannot proceed.")
 
     with open(file_path, 'r') as file:
         skills = json.load(file)
 
-    # Mandatory field validation
     if "model_version" not in skills or not skills["model_version"]:
         raise ValueError("Mandatory parameter 'model_version' is missing in ai-skills.json")
     if "test_reports_glob" not in skills or not skills["test_reports_glob"]:
@@ -38,17 +36,12 @@ def load_skills(file_path=".github/scripts/ai-skills.json"):
     return skills
 
 def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
-    """Reads the coding standards from an external markdown file."""
     if os.path.exists(file_path):
-        logger.info(f"Loaded coding standards from {file_path}")
         with open(file_path, 'r') as file:
             return file.read()
-    else:
-        logger.warning(f"{file_path} not found. Proceeding with empty coding standards.")
-        return ""
+    return ""
 
 def build_dynamic_context(skills: dict) -> str:
-    """Dynamically builds prompt context from all list-based rules in the skills JSON."""
     exclude_keys = [
         "model_version", "test_reports_glob", "max_retries", "target_exceptions",
         "test_command", "cleanup_directories", "fallback_exception_regex",
@@ -65,7 +58,6 @@ def build_dynamic_context(skills: dict) -> str:
     return "\n\n".join(context_blocks)
 
 def parse_prompt_config(prompt_data, default_prompt: str) -> str:
-    """Safely parses a prompt from the config, supporting both lists (multiline) and strings."""
     if not prompt_data:
         return default_prompt
     if isinstance(prompt_data, list):
@@ -73,7 +65,6 @@ def parse_prompt_config(prompt_data, default_prompt: str) -> str:
     return str(prompt_data)
 
 def find_exception_in_reports(skills: dict):
-    """Scans test reports for target exceptions using generic configured regex."""
     reports_glob = skills["test_reports_glob"]
     target_exceptions = skills.get("target_exceptions", [])
     fallback_regex = skills.get("fallback_exception_regex", r'([a-zA-Z0-9_.]+(?:Exception|Error|Failure))')
@@ -100,11 +91,10 @@ def find_exception_in_reports(skills: dict):
     return fallback_content, fallback_exc_type
 
 def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
-    """Uses Claude to intelligently identify ALL failing files."""
     dynamic_knowledge_base = build_dynamic_context(skills)
     model_version = skills["model_version"]
 
-    default_prompt = "Identify broken source files from this log.\n{dynamic_knowledge_base}\nLog:\n{stack_trace}\nReturn ONLY a JSON list of filenames."
+    default_prompt = "Identify broken files.\n{dynamic_knowledge_base}\nLog:\n{stack_trace}\nReturn JSON."
     raw_prompt = parse_prompt_config(skills.get("file_extraction_prompt"), default_prompt)
 
     prompt = raw_prompt.format(
@@ -112,17 +102,25 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
         stack_trace=stack_trace
     )
 
-    logger.info("========== AI FILE EXTRACTION PROMPT ==========\n" + prompt + "\n===============================================")
-
     message = client.messages.create(
         model=model_version,
         max_tokens=150,
         messages=[{"role": "user", "content": prompt}]
     )
 
+    raw_output = message.content[0].text.strip()
+
+    # NEW REGEX EXTRACTION: Ignore preamble, find only what's between <files> tags
+    match = re.search(r'<files>\s*(.*?)\s*</files>', raw_output, re.DOTALL)
+
     try:
-        raw_output = message.content[0].text.strip().replace("```json", "").replace("```", "")
-        file_names = json.loads(raw_output)
+        if match:
+            json_str = match.group(1).replace("```json", "").replace("```", "").strip()
+            file_names = json.loads(json_str)
+        else:
+            # Fallback if AI forgot tags but generated a raw array
+            clean_str = re.sub(r'^.*?(\[.*\]).*$', r'\1', raw_output, flags=re.DOTALL)
+            file_names = json.loads(clean_str)
 
         found_paths = []
         for file_name in file_names:
@@ -133,11 +131,10 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
 
         return found_paths
     except json.JSONDecodeError:
-        logger.error(f"Failed to parse AI file identification response: {message.content[0].text}")
+        logger.error(f"Failed to parse AI file identification response: {raw_output}")
         return []
 
 def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
-    """Asks Claude to fix the exception using fully dynamic prompts."""
     with open(file_path, 'r') as file:
         code_content = file.read()
 
@@ -162,9 +159,6 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         code=code_content
     )
 
-    logger.info("========== AI FIX GENERATION SYSTEM PROMPT ==========\n" + system_instructions + "\n=====================================================")
-    logger.info("========== AI FIX GENERATION USER PROMPT ==========\n" + user_prompt + "\n===================================================")
-
     message = client.messages.create(
         model=model_version,
         max_tokens=4000,
@@ -172,11 +166,17 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         messages=[{"role": "user", "content": user_prompt}]
     )
 
-    fixed_code = message.content[0].text
-    fixed_code = re.sub(r'^```[a-zA-Z]*\n', '', fixed_code)
-    fixed_code = fixed_code.replace('```', '').strip()
+    raw_output = message.content[0].text
 
-    logger.info(f"========== AI GENERATED FIX FOR {file_path} ==========\n" + fixed_code + "\n========================================================")
+    # NEW REGEX EXTRACTION: Strip preamble/markdown and find only what's between <code> tags
+    match = re.search(r'<code>\s*(.*?)\s*</code>', raw_output, re.DOTALL)
+
+    if match:
+        fixed_code = match.group(1).strip()
+    else:
+        # Fallback in case it ignores tags but uses markdown
+        fixed_code = re.sub(r'^```[a-zA-Z]*\n', '', raw_output)
+        fixed_code = fixed_code.replace('```', '').strip()
 
     return fixed_code
 
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
             with open(file_path, "w") as file:
                 file.write(fixed_code)
-                logger.info(f"Fix successfully applied to {file_path}")
+                logger.info(f"Fix applied to {file_path}")
 
             modified_files_map[file_path] = exc_type
 

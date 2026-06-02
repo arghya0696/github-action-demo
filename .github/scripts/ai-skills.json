@@ -1,5 +1,5 @@
 {
-  "model_version": "claude-sonnet-4-6",
+  "model_version": "claude-3-5-sonnet-20241022",
   "test_reports_glob": "target/surefire-reports/*.txt",
   "test_command": ["mvn", "test"],
   "cleanup_directories": ["target/surefire-reports"],
@@ -11,15 +11,18 @@
     "Analyze the following error log to identify the main project source files that need to be modified.",
     "",
     "CRITICAL EXTRACTION CONSTRAINTS:",
-    "1. Your primary goal is to find the broken source code.",
-    "2. DO NOT return Test classes unless the error is strictly a compilation syntax error within the test itself. Tracing the error down the stack is required.",
+    "1. Identify ONLY the deepest file in the stack trace that belongs to our application (the root cause). Do not return every file in the trace.",
+    "2. DO NOT return Test classes unless the error is strictly a compilation syntax error within the test itself.",
     "",
     "{dynamic_knowledge_base}",
     "",
     "Stack Trace / Error Log:",
     "{stack_trace}",
     "",
-    "Return ONLY a raw JSON list of exact file names with their extensions."
+    "Return the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:",
+    "<files>",
+    "[\"NPETestServiceImpl.java\"]",
+    "</files>"
   ],
 
   "fix_generation_system_prompt": [
@@ -28,10 +31,9 @@
     "",
     "CRITICAL CONSTRAINTS:",
     "1. NEVER delete, skip, or comment out test cases to resolve a failure.",
-    "2. Important : NEVER DELETE existing methods to fix a test",
-    "3. Important : NEVER DELETE existing methods from files , always try to fix it",
-    "3. If you are explicitly provided a Test file to fix, you may ONLY update assertions, mock behaviors, or fix syntax errors. You CANNOT remove the test logic.",
-    "4. Your primary goal is to fix the underlying source code logic to make the tests pass naturally.",
+    "2. NEVER alter the class name, class definition, or package declaration of the provided file.",
+    "3. NEVER delete unrelated existing methods. Only fix the specific method causing the error.",
+    "4. DO NOT completely rewrite the file. Keep the structure intact.",
     "",
     "### TEAM CODING STANDARDS ###",
     "{coding_standards}",
@@ -49,7 +51,10 @@
     "{code}",
     "",
     "Fix the {exc_type} in the code addressing the root cause indicated by the stack trace or compiler error.",
-    "Return ONLY the raw, updated code. Do not include markdown formatting."
+    "Return the updated code wrapped EXACTLY in <code> tags. NO markdown. NO preamble.",
+    "<code>",
+    "package com.tw...",
+    "</code>"
   ],
 
   "target_exceptions": [
@@ -68,7 +73,6 @@
 
   "file_extraction_rules": [
     "Target APPLICATION code (src/main/java) first.",
-    "Important : NEVER DELETE existing methods to fix a test",
     "CRITICAL: DO NOT return test files (files ending with 'Test.java' or 'Tests.java') unless the error is strictly a compilation syntax error within the test itself.",
     "If a test fails due to a runtime exception (e.g., NullPointerException), look deeper into the stack trace to find the actual service, controller, or component that threw the error.",
     "Spring Dependency Injection Errors: The user code will NOT be in the execution stack. Read the exception message carefully to identify missing annotations or bean conflicts.",
