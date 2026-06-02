@@ -29,6 +29,7 @@
     "CRITICAL CONSTRAINTS:",
     "1. NEVER delete, skip, or comment out test cases to resolve a failure.",
     "2. Important : NEVER DELETE existing methods to fix a test",
+    "3. Important : NEVER DELETE existing methods from files , always try to fix it",
     "3. If you are explicitly provided a Test file to fix, you may ONLY update assertions, mock behaviors, or fix syntax errors. You CANNOT remove the test logic.",
     "4. Your primary goal is to fix the underlying source code logic to make the tests pass naturally.",
     "",
