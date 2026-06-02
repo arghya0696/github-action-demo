@@ -103,11 +103,12 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
     )
 
     # HARDCODED XML EXTRACTION REQUIREMENT (Language Agnostic)
-    prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nReturn the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:\n<files>\n[\"path/to/broken_file.ext\"]\n</files>"
+    # Added strict rules against conversational text
+    prompt += "\n\nCRITICAL FORMATTING REQUIREMENT:\nYou MUST NOT output any explanations, reasoning, or conversational text. Return ONLY the XML block.\nReturn the output wrapped EXACTLY in <files> tags containing only the JSON array. Example:\n<files>\n[\"path/to/broken_file.ext\"]\n</files>"
 
     message = client.messages.create(
         model=model_version,
-        max_tokens=150,
+        max_tokens=500, # Increased from 150 to 500 to prevent mid-thought cutoffs
         messages=[{"role": "user", "content": prompt}]
     )
 
