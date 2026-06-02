@@ -22,22 +22,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 def load_skills(file_path=".github/scripts/ai-skills.json"):
-    """Loads the AI skills from an external JSON file."""
-    if os.path.exists(file_path):
-        logger.info(f"Loaded AI skills from {file_path}")
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    else:
-        logger.warning(f"{file_path} not found. Proceeding with default skills.")
-        return {
-            "model_version": "claude-sonnet-4-6",
-            "test_reports_glob": "target/surefire-reports/*.txt",
-            "target_exceptions": [],
-            "file_extraction_rules": [
-                "Look for the highest user-created classes in the execution stack.",
-                "Ignore standard Java libraries (java.base) and framework internal classes."
-            ]
-        }
+    """Loads the AI skills from an external JSON file and enforces mandatory fields."""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Configuration file {file_path} is missing. Cannot proceed.")
+
+    with open(file_path, 'r') as file:
+        skills = json.load(file)
+
+    # Mandatory field validation
+    if "model_version" not in skills or not skills["model_version"]:
+        raise ValueError("Mandatory parameter 'model_version' is missing in ai-skills.json")
+    if "test_reports_glob" not in skills or not skills["test_reports_glob"]:
+        raise ValueError("Mandatory parameter 'test_reports_glob' is missing in ai-skills.json")
+
+    return skills
 
 def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
     """Reads the coding standards from an external markdown file."""
@@ -46,25 +44,41 @@ def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
         with open(file_path, 'r') as file:
             return file.read()
     else:
-        logger.warning(f"{file_path} not found. Proceeding with default AI knowledge.")
-        return "Apply general modern Java best practices."
+        logger.warning(f"{file_path} not found. Proceeding with empty coding standards.")
+        return ""
 
 def build_dynamic_context(skills: dict) -> str:
     """Dynamically builds prompt context from all list-based rules in the skills JSON."""
-    context_blocks = []
+    exclude_keys = [
+        "model_version", "test_reports_glob", "max_retries", "target_exceptions",
+        "test_command", "cleanup_directories", "fallback_exception_regex",
+        "file_extraction_prompt", "fix_generation_system_prompt", "fix_generation_user_prompt"
+    ]
 
+    context_blocks = []
     for key, rules in skills.items():
-        if isinstance(rules, list) and rules:
+        if key not in exclude_keys and isinstance(rules, list) and rules:
             category_title = key.replace('_', ' ').upper()
             rules_str = "\n".join([f"- {rule}" for rule in rules])
             context_blocks.append(f"### {category_title} ###\n{rules_str}")
 
     return "\n\n".join(context_blocks)
 
-def find_exception_in_reports(target_exceptions, reports_glob):
-    """Scans test reports for target exceptions."""
-    reports = glob.glob(reports_glob)
+def parse_prompt_config(prompt_data, default_prompt: str) -> str:
+    """Safely parses a prompt from the config, supporting both lists (multiline) and strings."""
+    if not prompt_data:
+        return default_prompt
+    if isinstance(prompt_data, list):
+        return "\n".join(prompt_data)
+    return str(prompt_data)
 
+def find_exception_in_reports(skills: dict):
+    """Scans test reports for target exceptions using generic configured regex."""
+    reports_glob = skills["test_reports_glob"]
+    target_exceptions = skills.get("target_exceptions", [])
+    fallback_regex = skills.get("fallback_exception_regex", r'([a-zA-Z0-9_.]+(?:Exception|Error|Failure))')
+
+    reports = glob.glob(reports_glob)
     fallback_content, fallback_exc_type = None, None
 
     for report in reports:
@@ -74,11 +88,11 @@ def find_exception_in_reports(target_exceptions, reports_glob):
 
             for exc_type in target_exceptions:
                 if exc_type in content:
-                    logger.info(f"Found targeted {exc_type} in report: {report}")
+                    logger.info(f"Found targeted '{exc_type}' in report: {report}")
                     return content, exc_type
 
             if not fallback_exc_type:
-                match = re.search(r'([a-zA-Z0-9_.]+(?:Exception|Error|Failure))', content)
+                match = re.search(fallback_regex, content)
                 if match:
                     fallback_exc_type = match.group(1)
                     fallback_content = content
@@ -86,24 +100,17 @@ def find_exception_in_reports(target_exceptions, reports_glob):
     return fallback_content, fallback_exc_type
 
 def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
-    """Uses Claude to intelligently identify ALL failing files from the stack trace or compiler log."""
+    """Uses Claude to intelligently identify ALL failing files."""
     dynamic_knowledge_base = build_dynamic_context(skills)
-    model_version = skills.get("model_version", "claude-3-5-sonnet-20241022")
+    model_version = skills["model_version"]
 
-    prompt = f"""
-    Analyze the following Java stack trace or compilation error log to identify the main project source files that need to be modified.
-    
-    CRITICAL EXTRACTION CONSTRAINTS:
-    1. Your primary goal is to find the broken APPLICATION source code (e.g., files in src/main/java).
-    2. DO NOT return Test classes (e.g., GithubActionDemoApplicationTests.java) just because the test failed. You must trace the error down the stack to find the actual service or component causing the failure.
-    
-    {dynamic_knowledge_base}
-    
-    Stack Trace / Error Log:
-    {stack_trace}
-    
-    Return ONLY a raw JSON list of exact file names with their extensions (e.g., ["NPETestServiceImpl.java", "MyConfig.java"]). Do not output markdown blocks or any other text.
-    """
+    default_prompt = "Identify broken source files from this log.\n{dynamic_knowledge_base}\nLog:\n{stack_trace}\nReturn ONLY a JSON list of filenames."
+    raw_prompt = parse_prompt_config(skills.get("file_extraction_prompt"), default_prompt)
+
+    prompt = raw_prompt.format(
+        dynamic_knowledge_base=dynamic_knowledge_base,
+        stack_trace=stack_trace
+    )
 
     message = client.messages.create(
         model=model_version,
@@ -128,40 +135,30 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
         return []
 
 def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
-    """Asks Claude to fix the exception using external coding standards and skill rules."""
+    """Asks Claude to fix the exception using fully dynamic prompts."""
     with open(file_path, 'r') as file:
-        java_code = file.read()
+        code_content = file.read()
 
     dynamic_knowledge_base = build_dynamic_context(skills)
-    model_version = skills.get("model_version", "claude-3-5-sonnet-20241022")
+    model_version = skills["model_version"]
 
-    system_instructions = f"""
-    You are a Senior Java Staff Engineer resolving CI/CD pipeline failures. 
-    You must strictly adhere to the following Team Coding Standards.
-    
-    CRITICAL CONSTRAINTS:
-    1. NEVER delete, skip, or comment out test cases (e.g., `@Test` methods) to resolve a failure. 
-    2. If you are explicitly provided a Test file to fix, you may ONLY update assertions, mock behaviors, or fix syntax errors. You CANNOT remove the test logic.
-    3. Your primary goal is to fix the underlying source code logic to make the tests pass naturally.
-    
-    ### TEAM CODING STANDARDS ###
-    {coding_standards}
-    
-    {dynamic_knowledge_base}
-    """
+    default_sys = "Fix the code.\n{coding_standards}\n{dynamic_knowledge_base}"
+    raw_sys_prompt = parse_prompt_config(skills.get("fix_generation_system_prompt"), default_sys)
 
-    user_prompt = f"""
-    The following code throws a {exc_type}.
-    
-    Error Log / Stack Trace:
-    {stack_trace}
-    
-    Java Code (File: {file_path}):
-    {java_code}
-    
-    Fix the {exc_type} in the code addressing the root cause indicated by the stack trace or compiler error.
-    Return ONLY the raw, updated Java code. Do not include markdown formatting like ```java.
-    """
+    system_instructions = raw_sys_prompt.format(
+        coding_standards=coding_standards,
+        dynamic_knowledge_base=dynamic_knowledge_base
+    )
+
+    default_user = "Error: {exc_type}\nLog:\n{stack_trace}\nCode:\n{code}\nReturn ONLY updated code."
+    raw_user_prompt = parse_prompt_config(skills.get("fix_generation_user_prompt"), default_user)
+
+    user_prompt = raw_user_prompt.format(
+        exc_type=exc_type,
+        stack_trace=stack_trace,
+        file_path=file_path,
+        code=code_content
+    )
 
     message = client.messages.create(
         model=model_version,
@@ -170,10 +167,12 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         messages=[{"role": "user", "content": user_prompt}]
     )
 
-    return message.content[0].text.replace('```java', '').replace('```', '').strip()
+    fixed_code = message.content[0].text
+    fixed_code = re.sub(r'^```[a-zA-Z]*\n', '', fixed_code)
+    fixed_code = fixed_code.replace('```', '').strip()
+    return fixed_code
 
 def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> Optional[str]:
-
     if not fixes_applied:
         return None
 
@@ -183,11 +182,10 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         logger.info("No changes detected")
         return None
 
-    # capture original branch BEFORE checkout
     source_branch = (
-        os.environ.get("GITHUB_HEAD_REF")
-        or os.environ.get("GITHUB_REF_NAME")
-        or git_manager._get_current_branch()
+            os.environ.get("GITHUB_HEAD_REF")
+            or os.environ.get("GITHUB_REF_NAME")
+            or git_manager._get_current_branch()
     )
 
     branch_name, created_now = git_manager.create_branch()
@@ -196,57 +194,48 @@ def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> 
         return None
 
     git_manager.push_branch(branch_name)
-
     pr_state = git_manager.get_pr_state(branch_name)
 
     if created_now:
-        return git_manager.create_pr(
-            branch_name=branch_name,
-            files_changed=fixed_files,
-            base_branch=source_branch
-        )
+        return git_manager.create_pr(branch_name=branch_name, files_changed=fixed_files, base_branch=source_branch)
 
     if pr_state == "OPEN":
         logger.info("Existing PR is open — branch updated automatically.")
         return git_manager.get_existing_pr_url(branch_name)
 
     logger.info("Branch exists but PR is merged/closed — creating a new PR.")
-
-    return git_manager.create_pr(
-        branch_name=branch_name,
-        files_changed=fixed_files,
-        base_branch=source_branch
-    )
+    return git_manager.create_pr(branch_name=branch_name, files_changed=fixed_files, base_branch=source_branch)
 
 if __name__ == "__main__":
     workspace = Path(os.getcwd())
     git_manager = GitManager(workspace)
-
     modified_files_map = {}
 
     skills = load_skills(".github/scripts/ai-skills.json")
     standards = get_coding_standards(".github/scripts/coding-standards.md")
 
-    MAX_RETRIES = skills.get("max_retries", 3)
-    reports_glob = skills.get("test_reports_glob", "target/surefire-reports/*.txt")
-    reports_dir = os.path.dirname(reports_glob) or "."
+    MAX_RETRIES = skills.get("max_retries", 5)
+    test_command = skills.get("test_command", ["mvn", "test"])
+
+    default_cleanup = [os.path.dirname(skills["test_reports_glob"]) or "."]
+    cleanup_directories = skills.get("cleanup_directories", default_cleanup)
 
     attempt = 1
     success = False
     compilation_error_output = None
 
-    logger.info(f"Starting Self-Healing Loop (Max Attempts: {MAX_RETRIES})")
+    logger.info(f"Starting Self-Healing Loop (Max Attempts: {MAX_RETRIES}) | Command: {' '.join(test_command)}")
 
     while attempt <= MAX_RETRIES:
         logger.info(f"--- Attempt {attempt} of {MAX_RETRIES} ---")
 
         if compilation_error_output:
-            logger.info("Using compilation error output from previous attempt...")
+            logger.info("Using syntax error output from previous attempt...")
             stack_trace = compilation_error_output
-            exc_type = "Java Compilation Error"
+            exc_type = skills.get("compilation_error_identifier", "Compilation/Syntax Error")
             compilation_error_output = None
         else:
-            stack_trace, exc_type = find_exception_in_reports(skills.get("target_exceptions", []), reports_glob)
+            stack_trace, exc_type = find_exception_in_reports(skills)
 
             if not stack_trace or not exc_type:
                 if attempt == 1:
@@ -260,7 +249,7 @@ if __name__ == "__main__":
         failing_files = get_failing_files_from_ai(stack_trace, skills)
 
         if not failing_files:
-            logger.warning("Could not map stack trace/error to local files. Breaking loop.")
+            logger.warning("Could not map trace/error to local files. Breaking loop.")
             break
 
         logger.info(f"AI identified failing files: {failing_files}. Generating fixes...")
@@ -269,17 +258,17 @@ if __name__ == "__main__":
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
             with open(file_path, "w") as file:
                 file.write(fixed_code)
-                print(f"fix applied to {file_path}:\n", fixed_code)
+                print(f"Fix applied to {file_path}")
 
             modified_files_map[file_path] = exc_type
 
-        # Use the dynamic directory extracted from the glob for cleanup
-        if os.path.exists(reports_dir):
-            shutil.rmtree(reports_dir)
-            logger.info(f"Cleaned up old test reports at {reports_dir}.")
+        for directory in cleanup_directories:
+            if os.path.exists(directory):
+                shutil.rmtree(directory)
+                logger.info(f"Cleaned up directory at {directory}")
 
-        logger.info("Running Maven test to validate fixes...")
-        test_result = subprocess.run(["mvn", "test"], capture_output=True, text=True)
+        logger.info("Running configured test command to validate fixes...")
+        test_result = subprocess.run(test_command, capture_output=True, text=True)
 
         if test_result.returncode == 0:
             logger.info("✅ Tests passed successfully!")
@@ -288,18 +277,16 @@ if __name__ == "__main__":
         else:
             logger.error(f"❌ Fix validation failed on attempt {attempt}.")
 
-            # Validate against the dynamic paths
-            if not os.path.exists(reports_dir) or not glob.glob(reports_glob):
-                logger.error("Compilation failed. Extracting Maven error log for AI correction.")
+            reports_generated = any(glob.glob(skills["test_reports_glob"]))
+            if not reports_generated:
+                logger.error("No test logs generated. Extracting terminal error log for AI correction.")
                 compilation_error_output = test_result.stdout[-4000:]
 
             attempt += 1
 
     if success and modified_files_map:
         logger.info("Generating Pull Request with all accumulated fixes...")
-
         fixes_applied = [{"file": path, "exception": exc} for path, exc in modified_files_map.items()]
-
         pr_url = create_pr_and_commit(git_manager, fixes_applied)
         if pr_url:
             print(f"🎉 PR Created: {pr_url}")
