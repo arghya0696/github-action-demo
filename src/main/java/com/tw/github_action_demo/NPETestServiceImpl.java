@@ -15,7 +15,7 @@ public class NPETestServiceImpl {
     public void testNPE() {
         final Integer p = null;
 
-        final int compareTo = p.compareTo(11);
+        final int compareTo = Optional.ofNullable(p).map(val -> val.compareTo(11)).orElse(0);
 
         LOGGER.log(Level.INFO, String.valueOf(compareTo));
     }
