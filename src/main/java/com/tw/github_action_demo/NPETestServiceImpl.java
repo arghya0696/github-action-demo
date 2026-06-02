@@ -7,7 +7,6 @@ import java.util.logging.Logger;
 import org.springframework.stereotype.Service;
 
 
-@Service
 public class NPETestServiceImpl {
 
     private static final Logger LOGGER = Logger.getLogger(NPETestServiceImpl.class.getName());
@@ -15,9 +14,7 @@ public class NPETestServiceImpl {
     public void testNPE() {
         final Integer p = null;
 
-        final int compareTo = Optional.ofNullable(p)
-                .orElse(0)
-                .compareTo(10);
+        final int compareTo = p.compareTo(11);
 
         LOGGER.log(Level.INFO, String.valueOf(compareTo));
     }
