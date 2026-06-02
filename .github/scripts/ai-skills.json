@@ -1,5 +1,5 @@
 {
-  "model_version": "claude-3-5-sonnet-20241022",
+  "model_version": "claude-sonnet-4-6",
   "test_reports_glob": "target/surefire-reports/*.txt",
   "test_command": ["mvn", "test"],
   "cleanup_directories": ["target/surefire-reports"],
