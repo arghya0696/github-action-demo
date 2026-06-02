@@ -112,6 +112,8 @@ def get_failing_files_from_ai(stack_trace: str, skills: dict) -> List[str]:
         stack_trace=stack_trace
     )
 
+    logger.info("========== AI FILE EXTRACTION PROMPT ==========\n" + prompt + "\n===============================================")
+
     message = client.messages.create(
         model=model_version,
         max_tokens=150,
@@ -160,6 +162,9 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
         code=code_content
     )
 
+    logger.info("========== AI FIX GENERATION SYSTEM PROMPT ==========\n" + system_instructions + "\n=====================================================")
+    logger.info("========== AI FIX GENERATION USER PROMPT ==========\n" + user_prompt + "\n===================================================")
+
     message = client.messages.create(
         model=model_version,
         max_tokens=4000,
@@ -170,6 +175,9 @@ def generate_fix(file_path, stack_trace, exc_type, coding_standards, skills):
     fixed_code = message.content[0].text
     fixed_code = re.sub(r'^```[a-zA-Z]*\n', '', fixed_code)
     fixed_code = fixed_code.replace('```', '').strip()
+
+    logger.info(f"========== AI GENERATED FIX FOR {file_path} ==========\n" + fixed_code + "\n========================================================")
+
     return fixed_code
 
 def create_pr_and_commit(git_manager: GitManager, fixes_applied: List[Dict]) -> Optional[str]:
@@ -258,7 +266,7 @@ if __name__ == "__main__":
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
             with open(file_path, "w") as file:
                 file.write(fixed_code)
-                print(f"Fix applied to {file_path}")
+                logger.info(f"Fix successfully applied to {file_path}")
 
             modified_files_map[file_path] = exc_type
 
