@@ -28,8 +28,9 @@
     "",
     "CRITICAL CONSTRAINTS:",
     "1. NEVER delete, skip, or comment out test cases to resolve a failure.",
-    "2. If you are explicitly provided a Test file to fix, you may ONLY update assertions, mock behaviors, or fix syntax errors. You CANNOT remove the test logic.",
-    "3. Your primary goal is to fix the underlying source code logic to make the tests pass naturally.",
+    "2. Important : NEVER DELETE existing methods to fix a test",
+    "3. If you are explicitly provided a Test file to fix, you may ONLY update assertions, mock behaviors, or fix syntax errors. You CANNOT remove the test logic.",
+    "4. Your primary goal is to fix the underlying source code logic to make the tests pass naturally.",
     "",
     "### TEAM CODING STANDARDS ###",
     "{coding_standards}",
@@ -66,6 +67,7 @@
 
   "file_extraction_rules": [
     "Target APPLICATION code (src/main/java) first.",
+    "Important : NEVER DELETE existing methods to fix a test",
     "CRITICAL: DO NOT return test files (files ending with 'Test.java' or 'Tests.java') unless the error is strictly a compilation syntax error within the test itself.",
     "If a test fails due to a runtime exception (e.g., NullPointerException), look deeper into the stack trace to find the actual service, controller, or component that threw the error.",
     "Spring Dependency Injection Errors: The user code will NOT be in the execution stack. Read the exception message carefully to identify missing annotations or bean conflicts.",
