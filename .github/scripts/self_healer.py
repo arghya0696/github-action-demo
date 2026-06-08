@@ -33,6 +33,20 @@ def load_skills(file_path=".github/scripts/ai-skills.json"):
     if "test_reports_glob" not in skills or not skills["test_reports_glob"]:
         raise ValueError("Mandatory parameter 'test_reports_glob' is missing in ai-skills.json")
 
+    # --- NEW: Placeholder Validation ---
+    def check_placeholders(prompt_key, required_placeholders):
+        prompt_data = skills.get(prompt_key)
+        if not prompt_data:
+            return  # Fallback to defaults later, which are safe
+        prompt_str = "\n".join(prompt_data) if isinstance(prompt_data, list) else str(prompt_data)
+        for ph in required_placeholders:
+            if f"{{{ph}}}" not in prompt_str:
+                raise ValueError(f"CRITICAL ERROR: The custom '{prompt_key}' in ai-skills.json is missing the mandatory '{{{ph}}}' placeholder.")
+
+    check_placeholders("file_extraction_prompt", ["dynamic_knowledge_base", "stack_trace"])
+    check_placeholders("fix_generation_system_prompt", ["coding_standards", "dynamic_knowledge_base"])
+    check_placeholders("fix_generation_user_prompt", ["exc_type", "stack_trace", "file_path", "code"])
+
     return skills
 
 def get_coding_standards(file_path=".github/scripts/coding-standards.md"):
@@ -241,6 +255,7 @@ if __name__ == "__main__":
 
     MAX_RETRIES = skills.get("max_retries", 5)
     test_command = skills.get("test_command", ["mvn", "test"])
+    logger.info(f"test command is : {test_command}")
 
     default_cleanup = [os.path.dirname(skills["test_reports_glob"]) or "."]
     cleanup_directories = skills.get("cleanup_directories", default_cleanup)
@@ -283,6 +298,7 @@ if __name__ == "__main__":
             fixed_code = generate_fix(file_path, stack_trace, exc_type, standards, skills)
             with open(file_path, "w") as file:
                 file.write(fixed_code)
+                logger.info(f"fixed code is : {fixed_code}")
                 logger.info(f"Fix applied to {file_path}")
 
             modified_files_map[file_path] = exc_type
