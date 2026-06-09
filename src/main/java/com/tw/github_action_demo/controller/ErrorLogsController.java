@@ -1,6 +1,6 @@
 package com.tw.github_action_demo.controller;
 
-import com.tw.github_action_demo.NPETestServiceImpl;
+import com.tw.github_action_demo.failure.npe.TestServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +13,7 @@ import java.nio.file.Path;
 public class ErrorLogsController {
 
     @Autowired
-    NPETestServiceImpl testService;
+    TestServiceImpl testService;
 
     @Value("${logging.file.name:/tmp/app.log}")
     private String logFilePath;

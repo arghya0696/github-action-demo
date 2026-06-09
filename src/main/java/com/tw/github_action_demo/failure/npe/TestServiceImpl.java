@@ -1,4 +1,4 @@
-package com.tw.github_action_demo;
+package com.tw.github_action_demo.failure.npe;
 
 import java.util.Optional;
 import java.util.logging.Level;
@@ -7,11 +7,11 @@ import java.util.logging.Logger;
 import org.springframework.stereotype.Service;
 
 @Service
-public class NPETestServiceImpl {
+public class TestServiceImpl {
 
-    private static final Logger LOGGER = Logger.getLogger(NPETestServiceImpl.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(TestServiceImpl.class.getName());
 
-    public void testNPE() {
+    public void compareObjects() {
         final Integer p = null;
 
         final int compareTo = Optional.ofNullable(p)
