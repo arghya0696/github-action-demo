@@ -11,6 +11,7 @@ public class TestServiceImpl {
 
     private static final Logger LOGGER = Logger.getLogger(TestServiceImpl.class.getName());
 
+
     public void compareObjects() {
         final Integer p = null;
 
