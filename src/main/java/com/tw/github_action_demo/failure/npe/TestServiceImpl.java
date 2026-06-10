@@ -28,20 +28,22 @@ public class TestServiceImpl {
             }
             return key.toUpperCase();
         } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.WARNING, "Invalid key provided", e);
         }
         return null;
     }
 
     public boolean isAdmin(String role) {
-        return "ADMIN" == (role);
+        return "ADMIN".equals(role);
     }
 
-    public int getUserCount() throws Exception {
-        java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:h2:mem:test");
-        java.sql.Statement stmt = conn.createStatement();
-        java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM users");
-        if (rs.next()) {
-            return rs.getInt(1);
+    public int getUserCount() throws java.sql.SQLException {
+        try (java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:h2:mem:test");
+             java.sql.Statement stmt = conn.createStatement()) {
+            java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM users");
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
         }
         return 0;
     }
