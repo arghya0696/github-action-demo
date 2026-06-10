@@ -31,4 +31,19 @@ public class TestServiceImpl {
             LOGGER.log(Level.INFO, "Error while performing action : " + e.getMessage());
         }
     }
+
+    public String readConfig(String key) {
+        try {
+            if (key == null) {
+                throw new IllegalArgumentException("key must not be null");
+            }
+            return key.toUpperCase();
+        } catch (IllegalArgumentException e) {
+        }
+        return null;
+    }
+
+    public boolean isAdmin(String role) {
+        return role == "ADMIN";
+    }
 }
