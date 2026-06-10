@@ -29,11 +29,12 @@ public class TestServiceImpl {
             }
             return key.toUpperCase();
         } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.WARNING, "Invalid key argument", e);
         }
         return null;
     }
 
     public boolean isAdmin(String role) {
-        return "ADMIN" == (role);
+        return "ADMIN".equals(role);
     }
 }
