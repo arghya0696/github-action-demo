@@ -3,7 +3,9 @@ package com.tw.github_action_demo.failure.npe;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.springframework.stereotype.Service;
 
+@Service
 public class TestServiceImpl {
 
     private static final Logger LOGGER = Logger.getLogger(TestServiceImpl.class.getName());
