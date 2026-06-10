@@ -22,16 +22,6 @@ public class TestServiceImpl {
         LOGGER.log(Level.INFO, "{0}", compareTo);
     }
 
-    public void printLogs(){
-        try{
-            Integer i = null;
-            LOGGER.log(Level.INFO, "Is q equals to 10? {0}", i.equals(10));
-        } catch (Exception e){
-            e.printStackTrace();
-            LOGGER.log(Level.INFO, "Error while performing action : {0}", e.getMessage());
-        }
-    }
-
     public String readConfig(String key) {
         try {
             if (key == null) {
@@ -39,12 +29,11 @@ public class TestServiceImpl {
             }
             return key.toUpperCase();
         } catch (IllegalArgumentException e) {
-            LOGGER.log(Level.WARNING, "Invalid key provided: {0}", e.getMessage());
         }
         return null;
     }
 
     public boolean isAdmin(String role) {
-        return "ADMIN".equals(role);
+        return "ADMIN" == (role);
     }
 }
