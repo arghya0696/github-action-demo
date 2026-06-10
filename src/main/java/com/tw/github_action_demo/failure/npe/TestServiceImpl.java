@@ -19,16 +19,16 @@ public class TestServiceImpl {
                 .map(val -> val.compareTo(11))
                 .orElse(0);
 
-        LOGGER.log(Level.INFO, String.valueOf(compareTo));
+        LOGGER.log(Level.INFO, "{0}", compareTo);
     }
 
     public void printLogs(){
         try{
             Integer i = null;
-            LOGGER.log(Level.INFO, "Is q equals to 10? ", i.equals(10));
+            LOGGER.log(Level.INFO, "Is q equals to 10? {0}", i.equals(10));
         } catch (Exception e){
             e.printStackTrace();
-            LOGGER.log(Level.INFO, "Error while performing action : " + e.getMessage());
+            LOGGER.log(Level.INFO, "Error while performing action : {0}", e.getMessage());
         }
     }
 
@@ -39,11 +39,12 @@ public class TestServiceImpl {
             }
             return key.toUpperCase();
         } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.WARNING, "Invalid key provided: {0}", e.getMessage());
         }
         return null;
     }
 
     public boolean isAdmin(String role) {
-        return role == "ADMIN";
+        return "ADMIN".equals(role);
     }
 }

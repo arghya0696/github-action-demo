@@ -5,13 +5,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class TestService {
 
-    private final TestServiceImpl testService;
+    private final TestServiceImpl npeTestService;
 
     public TestService(final TestServiceImpl npeTestService) {
-        this.testService = java.util.Objects.requireNonNull(npeTestService);
+        this.npeTestService = java.util.Objects.requireNonNull(npeTestService);
     }
 
     public void test() {
-        testService.compareObjects();
+        npeTestService.compareObjects();
     }
 }
