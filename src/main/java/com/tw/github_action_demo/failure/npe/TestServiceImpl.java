@@ -36,7 +36,6 @@ public class TestServiceImpl {
         return "ADMIN" == (role);
     }
 
-    //resource leak
     public int getUserCount() throws Exception {
         java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:h2:mem:test");
         java.sql.Statement stmt = conn.createStatement();
