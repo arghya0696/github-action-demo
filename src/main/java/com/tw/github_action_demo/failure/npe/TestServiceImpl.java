@@ -3,7 +3,6 @@ package com.tw.github_action_demo.failure.npe;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
 import org.springframework.stereotype.Service;
 
 @Service
